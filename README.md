@@ -1,51 +1,54 @@
 # webdamga
 
-**Yerel web kanıt/arşiv aracı.** Bir URL'nin belirli bir andaki halini —
-ekran görüntüsü, ham + render edilmiş HTML, ağ trafiği, MHTML arşivi, PDF ve
-konsol kayıtlarıyla birlikte — kayıt altına alır ve tüm çıktıları **SHA-256
-bütünlük manifestosu** ile mühürler. urlscan.io / archive.today mantığında,
-ama elde tutulabilir delil üretmeye odaklı ve tamamen `localhost`'ta çalışır.
+**A local web evidence and archiving tool.** ("damga" is Turkish for
+"stamp".) It captures a URL exactly as it looked at a given moment (full
+page screenshot, raw + rendered HTML, network traffic, an MHTML archive,
+PDF, and console logs) and seals every output with a **SHA-256 integrity
+manifest**. Same idea as urlscan.io / archive.today, but focused on
+producing evidence you can hold onto, and it runs entirely on `localhost`.
 
-Tipik kullanım: bir phishing sayfasını ihbar etmeden önce (registrar, hosting,
-CERT, banka) sayfanın o anki halini oynanmamış biçimde kayıt altına almak.
+Typical use: recording a phishing page exactly as it appeared, before you
+report it (to the registrar, the host, a CERT, a bank), in a form nobody can
+say was tampered with.
+
+*[Türkçe README için buraya bakabilirsin](README.tr.md).*
 
 ---
 
-## Ekran görüntüleri
+## Screenshots
 
-| Yakalama başlat / geçmiş | Kanıt + SHA-256 doğrulama |
+| Start a capture / history | Evidence + SHA-256 verification |
 | --- | --- |
-| ![Ana sayfa: yeni yakalama formu ve geçmiş yakalamalar listesi](docs/screenshots/index.png) | ![Yakalama detayı: özet, ekran görüntüsü, dosya listesi ve bütünlük doğrulama sonucu](docs/screenshots/capture-detail.png) |
+| ![Home page: new capture form and capture history](docs/screenshots/index.png) | ![Capture detail: summary, screenshot, file list, and integrity check result](docs/screenshots/capture-detail.png) |
 
 ---
 
-## Ne üretir
+## What it produces
 
-Her yakalama `data/captures/<id>/` altında şu dosyaları oluşturur:
+Every capture writes the following into `data/captures/<id>/`:
 
-| Dosya | İçerik |
+| File | Contents |
 | --- | --- |
-| `screenshot.png` | Tam sayfa ekran görüntüsü |
-| `screenshot-viewport.png` | Görünür alan (ekran üstü) |
-| `response.html` | Ana belgenin **ham HTTP yanıt gövdesi** (JS öncesi) |
-| `dom.html` | JS çalıştıktan sonra **render edilmiş DOM** |
-| `page.mhtml` | Tek dosyalık, kendi kendine yeten arşiv (Chrome'da açılır) |
-| `page.pdf` | Yazdır → PDF |
-| `network.har` | Tüm istek/yanıtlar, gövdeler gömülü |
-| `console.log` | Konsol mesajları + sayfa hataları |
-| `metadata.json` | İstenen/nihai URL, yönlendirme zinciri, HTTP durumu ve başlıklar, sunucu IP'si, TLS sertifikası, sayfa başlığı, favicon, UTC zaman damgaları, User-Agent, gezinme zamanlamaları, kaynak özeti, yakalayan makine |
-| `manifest.json` | Yukarıdaki **her dosyanın SHA-256 özeti** + araç sürümü |
-| `manifest.sha256` | `manifest.json`'un kendi özeti (sidecar) |
+| `screenshot.png` | Full page screenshot |
+| `screenshot-viewport.png` | Above the fold only |
+| `response.html` | The main document's **raw HTTP response body** (pre-JS) |
+| `dom.html` | The **rendered DOM**, after JS has run |
+| `page.mhtml` | A single-file, self-contained archive (opens in Chrome) |
+| `page.pdf` | Print to PDF |
+| `network.har` | Every request/response, with bodies embedded |
+| `console.log` | Console messages plus page errors |
+| `metadata.json` | Requested/final URL, redirect chain, HTTP status and headers, server IP, TLS certificate, page title, favicon, UTC timestamps, User-Agent, navigation timing, resource summary, capturing machine |
+| `manifest.json` | **SHA-256 of every file above**, plus the tool version |
+| `manifest.sha256` | The manifest's own checksum (sidecar) |
 
-`manifest.json` + `manifest.sha256`, klasörün sonradan değiştirilmediğini
-göstermenin çıpasıdır. `webdamga verify <id>` her iki katmanı da yeniden
-hesaplar.
+`manifest.json` plus `manifest.sha256` is the anchor for proving the folder
+hasn't been altered since. `webdamga verify <id>` recomputes both layers.
 
 ---
 
-## Kurulum
+## Installation
 
-Python **3.11+** gerekir.
+Requires Python **3.11+**.
 
 ```bash
 python3.12 -m venv .venv
@@ -54,65 +57,64 @@ pip install -e .
 python -m playwright install chromium
 ```
 
-> `playwright install chromium` bir kez Chromium'u (~150 MB) indirir.
+> `playwright install chromium` downloads Chromium (~150 MB) once.
 
 ---
 
-## Kullanım
+## Usage
 
 ### CLI
 
 ```bash
-# Tek bir URL yakala
-webdamga capture https://ornek.com/giris
+# Capture a single URL
+webdamga capture https://example.com/login
 
-# Seçeneklerle
-webdamga capture https://ornek.com --wait-until networkidle --wait 3 --width 1440
+# With options
+webdamga capture https://example.com --wait-until networkidle --wait 3 --width 1440
 
-# Son yakalamalar
+# Recent captures
 webdamga list
 
-# Bir yakalamanın bütünlüğünü doğrula
-webdamga verify 20260910T142530Z-ornek-com-ab12cd
+# Verify a capture's integrity
+webdamga verify 20260910T142530Z-example-com-ab12cd
 ```
 
-`webdamga capture` çıkışta yakalama `id`'sini, nihai URL'yi, HTTP durumunu,
-sunucu IP'sini, TLS bilgisini ve `manifest.sha256` özetini yazar. Bu özeti
-ayrı bir yere (e-posta, ihbar formu, not) kaydetmek, delili daha sonra
-"bu klasör o gün buydu" diye kanıtlamayı sağlar.
+`webdamga capture` prints the capture `id`, final URL, HTTP status, server
+IP, TLS info, and the `manifest.sha256` checksum. Keeping a copy of that
+checksum somewhere else (an email, a report form, a note) lets you prove
+later that "this folder is what it was on that day."
 
-### Web arayüzü
+### Web interface
 
 ```bash
 webdamga serve            # http://127.0.0.1:8000
 ```
 
-- URL gir → yakala
-- Geçmiş yakalamaları gez
-- Ekran görüntüsü, metadata, yönlendirme zinciri, dosya listesi + SHA-256
-- **Bütünlüğü doğrula** düğmesi
+- Enter a URL, capture it
+- Browse past captures
+- Screenshot, metadata, redirect chain, file list with SHA-256
+- A **verify integrity** button
 
 ### JSON API
 
-| Uç | Açıklama |
+| Endpoint | Description |
 | --- | --- |
-| `GET /api/captures` | Yakalama indeksi |
-| `GET /api/captures/{id}` | Bir yakalamanın `metadata.json`'u |
-| `GET /captures/{id}/verify` | Bütünlük doğrulama sonucu (JSON) |
-| `GET /captures/{id}/files/{ad}` | Yakalama dosyasını indir (yalnızca manifestodaki adlar) |
+| `GET /api/captures` | Capture index |
+| `GET /api/captures/{id}` | A capture's `metadata.json` |
+| `GET /captures/{id}/verify` | Integrity check result (JSON) |
+| `GET /captures/{id}/files/{name}` | Download a capture file (only names listed in the manifest) |
 
 ---
 
-## Veri klasörü
+## Data directory
 
-Varsayılan: çalışılan dizinde `./data`. `--data-dir` ile ya da
-`WEBDAMGA_DATA_DIR` ortam değişkeniyle değiştirilebilir. İndeks
-`data/webdamga.db` (SQLite) dosyasında tutulur. `data/` klasörü `.gitignore`
-kapsamındadır.
+Defaults to `./data` in the working directory. Override with `--data-dir` or
+the `WEBDAMGA_DATA_DIR` environment variable. The index lives in
+`data/webdamga.db` (SQLite). `data/` is covered by `.gitignore`.
 
 ---
 
-## Testler
+## Tests
 
 ```bash
 pip install -e ".[dev]"
@@ -121,27 +123,27 @@ pytest
 
 ---
 
-## Yol haritası
+## Roadmap
 
-- [ ] WARC çıktısı (Wayback / replay uyumlu)
-- [ ] RFC 3161 / OpenTimestamps güvenilir zaman damgası
-- [ ] Manifesto imzalama (minisign / age / PGP)
-- [ ] Tor / proxy üzerinden yakalama, ülke seçimi
-- [ ] Aynı URL'nin iki yakalamasını karşılaştırma (görsel + DOM diff)
-- [ ] Bir URL'yi zamanlanmış aralıklarla izleme
-- [ ] Tek sayfalık PDF delil raporu (ekran görüntüsü + hash'ler + metadata)
-- [ ] Arka planda kuyruk + yakalama durumu (arayüzü kilitlememek için)
+- [ ] WARC output (Wayback / replay compatible)
+- [ ] RFC 3161 / OpenTimestamps trusted timestamping
+- [ ] Manifest signing (minisign / age / PGP)
+- [ ] Capturing through Tor / a proxy, country selection
+- [ ] Comparing two captures of the same URL (visual + DOM diff)
+- [ ] Monitoring a URL on a schedule
+- [ ] A one-page PDF evidence report (screenshot + hashes + metadata)
+- [ ] A background queue with capture status (so the UI doesn't block)
 
 ---
 
-## Yasal / etik not
+## Legal / ethical note
 
-`webdamga` yalnızca **yetkili ve yasal** amaçlarla — kendi varlıklarının
-takibi, phishing/marka istismarı ihbarı, olay müdahalesi, akademik araştırma —
-kullanılmak üzere tasarlanmıştır. Yakaladığınız sitelere erişimde ve topladığınız
-veriyi saklama/paylaşmada geçerli mevzuata ve hedef sitenin kullanım şartlarına
-uymak kullanıcının sorumluluğundadır.
+`webdamga` is meant for **authorized, lawful** use only: monitoring your own
+assets, reporting phishing or brand abuse, incident response, academic
+research. Complying with applicable law and the target site's terms of
+service, when accessing sites you capture and when storing or sharing the
+data you collect, is the user's responsibility.
 
-## Lisans
+## License
 
-MIT — bkz. [LICENSE](LICENSE).
+MIT, see [LICENSE](LICENSE).
