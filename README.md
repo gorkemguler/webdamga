@@ -11,6 +11,14 @@ CERT, banka) sayfanın o anki halini oynanmamış biçimde kayıt altına almak.
 
 ---
 
+## Ekran görüntüleri
+
+| Yakalama başlat / geçmiş | Kanıt + SHA-256 doğrulama |
+| --- | --- |
+| ![Ana sayfa: yeni yakalama formu ve geçmiş yakalamalar listesi](docs/screenshots/index.png) | ![Yakalama detayı: özet, ekran görüntüsü, dosya listesi ve bütünlük doğrulama sonucu](docs/screenshots/capture-detail.png) |
+
+---
+
 ## Ne üretir
 
 Her yakalama `data/captures/<id>/` altında şu dosyaları oluşturur:
