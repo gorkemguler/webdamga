@@ -1,0 +1,27 @@
+# webdamga verisi (yakalamalar + indeks) — repoya girmez
+/data/
+*.db
+
+# python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+
+# playwright
+/playwright-report/
+/test-results/
+
+# editör / işletim sistemi
+.DS_Store
+.idea/
+.vscode/
+*.swp

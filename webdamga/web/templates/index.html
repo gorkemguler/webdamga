@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block body %}
+<section class="card">
+  <h2>Yeni yakalama</h2>
+  <form method="post" action="/captures" class="capture-form" id="capture-form">
+    <input type="url" name="url" placeholder="https://ornek.com/giris" required autofocus autocomplete="off">
+    <div class="opts">
+      <label>wait-until
+        <select name="wait_until">
+          <option value="load" selected>load</option>
+          <option value="domcontentloaded">domcontentloaded</option>
+          <option value="networkidle">networkidle</option>
+          <option value="commit">commit</option>
+        </select>
+      </label>
+      <label>zaman aşımı (sn)<input type="number" name="timeout" value="30" min="5" max="120"></label>
+      <label>ek bekleme (sn)<input type="number" step="0.5" name="wait" value="1.5" min="0" max="30"></label>
+      <label>genişlik<input type="number" name="width" value="1280" min="320" max="3840"></label>
+      <label>yükseklik<input type="number" name="height" value="800" min="320" max="4320"></label>
+      <label class="chk"><input type="checkbox" name="full_page" value="true" checked> tam sayfa</label>
+    </div>
+    <button type="submit">Yakala</button>
+    <p class="hint">Yakalama 5&ndash;30 sn sürebilir; bu sürede sayfa yanıt vermez.</p>
+  </form>
+</section>
+
+<section class="card">
+  <h2>Yakalamalar <span class="dim">({{ captures|length }})</span></h2>
+  <table class="list">
+    <thead><tr><th>id</th><th>URL</th><th>HTTP</th><th>tarih (UTC)</th><th></th></tr></thead>
+    <tbody>
+    {% for c in captures %}
+      <tr class="{{ 'err' if not c.ok }}">
+        <td><a href="/captures/{{ c.id }}"><code>{{ c.id }}</code></a></td>
+        <td class="url">{{ c.final_url or c.requested_url }}</td>
+        <td>{{ c.http_status or '—' }}</td>
+        <td class="nowrap">{{ c.created_utc }}</td>
+        <td>{% if not c.ok %}<span class="badge err">hata</span>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="dim">Henüz yakalama yok.</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
+<script>
+  document.getElementById('capture-form').addEventListener('submit', function () {
+    var b = this.querySelector('button');
+    b.disabled = true;
+    b.textContent = 'Yakalanıyor…';
+  });
+</script>
+{% endblock %}
