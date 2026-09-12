@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="{{ lang }}">
+<head>
+<meta charset="utf-8">
+<title>{{ _('report.title') }} - {{ m.capture_id }}</title>
+<style>
+  @page { size: A4; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: #14171c;
+    background: #fff;
+    font: 10pt/1.45 -apple-system, "Helvetica Neue", Arial, sans-serif;
+  }
+  h1 { margin: 0 0 2pt; font-size: 17pt; letter-spacing: -.2pt; }
+  h2 {
+    margin: 16pt 0 5pt;
+    padding-bottom: 3pt;
+    border-bottom: .8pt solid #c9ced6;
+    font-size: 10.5pt;
+    text-transform: uppercase;
+    letter-spacing: .6pt;
+    color: #3a424e;
+  }
+  .sub { color: #667085; font-size: 8.5pt; margin-bottom: 2pt; }
+  header { border-bottom: 2pt solid #14171c; padding-bottom: 8pt; margin-bottom: 4pt; }
+  .brand { font-weight: 700; letter-spacing: .3pt; }
+  .brand span { color: #10897c; }
+
+  dl { display: grid; grid-template-columns: 33% 67%; gap: 2.5pt 8pt; margin: 0; }
+  dt { color: #667085; }
+  dd { margin: 0; word-break: break-word; }
+  .mono, code { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 8.5pt; }
+
+  .banner {
+    margin: 8pt 0;
+    padding: 6pt 8pt;
+    border-left: 3pt solid #b42318;
+    background: #fef3f2;
+    color: #b42318;
+    font-size: 9pt;
+  }
+
+  figure { margin: 0; }
+  /* Delil değeri düşmesin diye kırpmıyoruz, orantılı küçültüyoruz. */
+  .shot {
+    display: block;
+    max-width: 100%;
+    max-height: 105mm;
+    width: auto;
+    margin: 0 auto;
+    border: .8pt solid #c9ced6;
+    border-radius: 2pt;
+  }
+  figcaption { margin-top: 4pt; color: #667085; font-size: 8pt; }
+
+  ol.chain { margin: 0; padding-left: 14pt; }
+  ol.chain li { margin-bottom: 2pt; }
+
+  table { width: 100%; border-collapse: collapse; font-size: 8.5pt; }
+  th, td { text-align: left; padding: 3pt 4pt; border-bottom: .5pt solid #dfe3e8; vertical-align: top; }
+  th { color: #667085; font-weight: 600; text-transform: uppercase; font-size: 7.5pt; letter-spacing: .4pt; }
+  td.hash { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 7pt; word-break: break-all; }
+  td.num { text-align: right; white-space: nowrap; }
+
+  .anchor {
+    margin: 8pt 0;
+    padding: 7pt 9pt;
+    background: #f2f7f6;
+    border: .8pt solid #a9d3cd;
+    border-radius: 3pt;
+  }
+  .anchor .label { color: #10897c; font-size: 7.5pt; text-transform: uppercase; letter-spacing: .5pt; font-weight: 700; }
+  .anchor .value { font-family: "SF Mono", Menlo, Consolas, monospace; font-size: 9pt; word-break: break-all; margin-top: 2pt; }
+
+  ol.steps { margin: 4pt 0 0; padding-left: 14pt; }
+  ol.steps li { margin-bottom: 3pt; }
+  pre {
+    margin: 3pt 0 0;
+    padding: 5pt 7pt;
+    background: #f5f6f8;
+    border: .5pt solid #dfe3e8;
+    border-radius: 2pt;
+    font-family: "SF Mono", Menlo, Consolas, monospace;
+    font-size: 8pt;
+    white-space: pre-wrap;
+  }
+  .note { margin-top: 6pt; color: #667085; font-size: 8pt; }
+  footer {
+    margin-top: 14pt;
+    padding-top: 6pt;
+    border-top: .5pt solid #dfe3e8;
+    color: #667085;
+    font-size: 7.5pt;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>{{ _('report.title') }}</h1>
+  <div class="sub">
+    <span class="brand">web<span>damga</span></span> &middot;
+    {{ _('report.generated', version=version, date=generated_utc) }}
+  </div>
+</header>
+
+{% if m.error %}<div class="banner">{{ _('report.error') }}: {{ m.error }}</div>{% endif %}
+
+<h2>{{ _('report.section.capture') }}</h2>
+<dl>
+  <dt>{{ _('report.field.capture_id') }}</dt><dd class="mono">{{ m.capture_id }}</dd>
+  <dt>{{ _('report.field.requested_url') }}</dt><dd class="mono">{{ m.requested_url }}</dd>
+  <dt>{{ _('report.field.final_url') }}</dt><dd class="mono">{{ m.final_url }}</dd>
+  <dt>{{ _('report.field.http') }}</dt><dd>{{ m.http_status }} {{ m.http_status_text }}</dd>
+  <dt>{{ _('report.field.page_title') }}</dt><dd>{{ m.page_title }}</dd>
+  <dt>{{ _('report.field.requested_at') }}</dt><dd class="mono">{{ m.requested_at_utc }}</dd>
+  <dt>{{ _('report.field.completed_at') }}</dt><dd class="mono">{{ m.completed_at_utc }}</dd>
+</dl>
+
+<h2>{{ _('report.section.network') }}</h2>
+<dl>
+  {% if m.remote_address %}
+  <dt>{{ _('report.field.server_ip') }}</dt>
+  <dd class="mono">{{ m.remote_address.ipAddress }}:{{ m.remote_address.port }}</dd>
+  {% endif %}
+  {% if m.tls %}
+  <dt>{{ _('report.field.tls') }}</dt>
+  <dd>{{ m.tls.protocol }}<br><span class="mono">{{ m.tls.issuer }} &rarr; {{ m.tls.subjectName }}</span></dd>
+  <dt>{{ _('report.field.tls_valid') }}</dt>
+  <dd class="mono">{{ m.tls.validFrom_iso or m.tls.validFrom }} &ndash; {{ m.tls.validTo_iso or m.tls.validTo }}</dd>
+  {% endif %}
+  {% if m.resource_summary %}
+  <dt>{{ _('report.field.resources') }}</dt>
+  <dd>{{ _('web.detail.requests', count=m.resource_summary.request_count or 0) }},
+      {{ (m.resource_summary.transfer_bytes / 1024) | round(1) }} KB</dd>
+  {% endif %}
+  <dt>{{ _('report.field.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>
+  <dt>{{ _('report.field.user_agent') }}</dt><dd class="mono">{{ m.user_agent }}</dd>
+  <dt>{{ _('report.field.captured_by') }}</dt>
+  <dd class="mono">{{ m.capture_host.hostname }} &middot; {{ m.capture_host.platform }}</dd>
+</dl>
+
+{% if m.redirect_chain %}
+<h2>{{ _('report.section.redirects') }}</h2>
+<ol class="chain mono">
+  {% for r in m.redirect_chain %}<li><b>{{ r.status }}</b> {{ r.url }}</li>{% endfor %}
+  <li><b>{{ m.http_status }}</b> {{ m.final_url }}</li>
+</ol>
+{% endif %}
+
+<h2>{{ _('report.section.screenshot') }}</h2>
+{% if screenshot %}
+<figure>
+  <img class="shot" src="{{ screenshot }}" alt="{{ _('web.detail.screenshot_alt') }}">
+  <figcaption>{{ _('report.screenshot.caption') }}</figcaption>
+</figure>
+{% else %}
+<p class="note">{{ _('report.screenshot.missing') }}</p>
+{% endif %}
+
+<h2>{{ _('report.section.files') }}</h2>
+{% if manifest_sha256 %}
+<div class="anchor">
+  <div class="label">{{ _('report.field.manifest_sha') }}</div>
+  <div class="value">{{ manifest_sha256 }}</div>
+</div>
+{% endif %}
+<table>
+  <thead><tr>
+    <th>{{ _('report.col.file') }}</th>
+    <th class="num">{{ _('report.col.size') }}</th>
+    <th>{{ _('report.col.sha256') }}</th>
+  </tr></thead>
+  <tbody>
+  {% for f in manifest.files %}
+    <tr>
+      <td class="mono">{{ f.name }}</td>
+      <td class="num">{{ f.size }}</td>
+      <td class="hash">{{ f.sha256 }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table>
+
+<h2>{{ _('report.section.verify') }}</h2>
+<p>{{ _('report.verify.intro') }}</p>
+<ol class="steps">
+  <li>{{ _('report.verify.step1') }}
+    <pre>shasum -a 256 screenshot.png dom.html response.html</pre></li>
+  <li>{{ _('report.verify.step2') }}
+    <pre>shasum -a 256 -c manifest.sha256</pre></li>
+  <li>{{ _('report.verify.step3') }}
+    <pre>webdamga verify {{ m.capture_id }}</pre></li>
+</ol>
+<p class="note">{{ _('report.verify.note') }}</p>
+
+<footer>{{ _('report.footer') }}</footer>
+
+</body>
+</html>

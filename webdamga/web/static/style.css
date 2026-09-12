@@ -93,6 +93,22 @@ h3 button { margin-left: 8px; padding: 3px 10px; font-size: 12px; }
 
 .hint { color: var(--dim); font-size: 12px; }
 
+.share { border-color: #2f4d49; }
+.share-actions { display: flex; flex-wrap: wrap; gap: 10px; margin: 12px 0 8px; }
+.btn {
+  display: inline-block;
+  padding: 9px 16px;
+  background: var(--acc);
+  color: #06231f;
+  border: 1px solid var(--acc);
+  border-radius: 6px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.btn:hover { filter: brightness(1.08); }
+.btn.ghost { background: transparent; color: var(--acc); }
+.btn.ghost:hover { background: rgba(79, 209, 197, .1); }
+
 table.list { width: 100%; border-collapse: collapse; font-size: 13px; }
 table.list th, table.list td {
   text-align: left;

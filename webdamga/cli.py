@@ -8,6 +8,7 @@ ayrıca `webdamga --lang tr ...` ile değiştirilebilir.
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 
 import typer
@@ -20,6 +21,7 @@ from .capture import normalize_url
 from .config import CaptureSettings, default_data_dir
 from .hashing import verify_capture
 from .i18n import SUPPORTED_LANGS, detect_lang, normalize_lang, t, tn
+from .report import default_package_name, export_package
 from .storage import Store
 
 # Yardım metinleri decorator zamanında kurulduğu için ortamdan gelen dile bağlı.
@@ -39,6 +41,7 @@ app = typer.Typer(add_completion=False, help=_h("cli.app.help"))
 console = Console()
 
 _DataDir = typer.Option(None, "--data-dir", "-d", help=_h("cli.opt.data_dir"))
+_ExportOutput = typer.Option(None, "--output", "-o", help=_h("cli.export.opt.output"))
 
 
 def _resolve_data_dir(value: Path | None) -> Path:
@@ -187,6 +190,41 @@ def verify(
         raise typer.Exit(0)
     console.print(f"\n[red]{t('cli.verify.broken', lang)}[/]")
     raise typer.Exit(2)
+
+
+@app.command(help=_h("cli.export.help"))
+def export(
+    capture_id: str = typer.Argument(..., help=_h("cli.export.arg.id")),
+    data_dir: Path | None = _DataDir,
+    output: Path | None = _ExportOutput,
+    pdf: bool = typer.Option(True, "--pdf/--no-pdf", help=_h("cli.export.opt.pdf")),
+) -> None:
+    """Export a capture as a single sendable evidence package."""
+    lang = _lang()
+    cap_dir = _resolve_data_dir(data_dir) / "captures" / capture_id
+    if not cap_dir.is_dir():
+        console.print(f"[red]{t('cli.verify.not_found', lang)}[/] {cap_dir}")
+        raise typer.Exit(1)
+
+    meta = json.loads((cap_dir / "metadata.json").read_text(encoding="utf-8"))
+    manifest_path = cap_dir / "manifest.json"
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8")) if manifest_path.is_file() else {}
+    target = Path(output) if output else Path.cwd() / default_package_name(capture_id)
+
+    if pdf:
+        console.print(f"[dim]{t('cli.export.building_pdf', lang)}[/]")
+    package, digest = asyncio.run(export_package(cap_dir, meta, manifest, target, lang, pdf))
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="dim")
+    table.add_column(overflow="fold")
+    table.add_row(t("cli.export.written", lang), str(package))
+    table.add_row(t("cli.export.size", lang), f"{package.stat().st_size / 1024:.1f} KB")
+    table.add_row(t("cli.export.sha", lang), digest)
+    if meta.get("manifest_sha256_sidecar"):
+        table.add_row(t("cli.export.manifest_sha", lang), meta["manifest_sha256_sidecar"])
+    console.print(table)
+    console.print(f"\n[green]{t('cli.export.done', lang)}[/]")
 
 
 @app.command(help=_h("cli.serve.help"))

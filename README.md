@@ -103,12 +103,37 @@ webdamga list
 
 # Verify a capture's integrity
 webdamga verify 20260910T142530Z-example-com-ab12cd
+
+# Package it up to send to someone
+webdamga export 20260910T142530Z-example-com-ab12cd
 ```
 
 `webdamga capture` prints the capture `id`, final URL, HTTP status, server
 IP, TLS info, and the `manifest.sha256` checksum. Keeping a copy of that
 checksum somewhere else (an email, a report form, a note) lets you prove
 later that "this folder is what it was on that day."
+
+### Sending a capture as evidence
+
+`webdamga export <id>` produces one `.zip` you can attach to an abuse report:
+
+```
+webdamga-<id>.zip
+└── <id>/
+    ├── README.txt            what this is, and how to verify it without webdamga
+    ├── evidence-report.pdf   readable summary: URLs, TLS, screenshot, checksums
+    └── …                     every artefact from the capture, plus the manifest
+```
+
+The command prints the package's own SHA-256. Keep it with your report so the
+recipient can confirm the file they got is the file you sent.
+
+The recipient does not need this tool. `README.txt` walks them through checking
+the artefacts against `manifest.json`, and `manifest.json` against
+`manifest.sha256`, with plain `shasum` commands.
+
+`README.txt` and `evidence-report.pdf` are created while packaging, so they are
+deliberately not listed in `manifest.json`. Everything else is.
 
 ### Web interface
 
@@ -120,6 +145,7 @@ webdamga serve            # http://127.0.0.1:8000
 - Browse past captures
 - Screenshot, metadata, redirect chain, file list with SHA-256
 - A **verify integrity** button
+- **Send as evidence**: download the `.zip` package or just the PDF report
 
 ### JSON API
 
@@ -129,6 +155,8 @@ webdamga serve            # http://127.0.0.1:8000
 | `GET /api/captures/{id}` | A capture's `metadata.json` |
 | `GET /captures/{id}/verify` | Integrity check result (JSON) |
 | `GET /captures/{id}/files/{name}` | Download a capture file (only names listed in the manifest) |
+| `GET /captures/{id}/report.pdf` | PDF evidence report |
+| `GET /captures/{id}/export.zip` | Full evidence package; its SHA-256 comes back in the `x-webdamga-package-sha256` header |
 
 ---
 
@@ -157,7 +185,7 @@ pytest
 - [ ] Capturing through Tor / a proxy, country selection
 - [ ] Comparing two captures of the same URL (visual + DOM diff)
 - [ ] Monitoring a URL on a schedule
-- [ ] A one-page PDF evidence report (screenshot + hashes + metadata)
+- [x] PDF evidence report and a sendable `.zip` package
 - [ ] A background queue with capture status (so the UI doesn't block)
 
 ---

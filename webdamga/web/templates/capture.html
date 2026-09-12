@@ -42,6 +42,20 @@
 </section>
 {% endif %}
 
+<section class="card share">
+  <h3>{{ _('web.detail.share') }}</h3>
+  <p class="hint">{{ _('web.detail.share.hint') }}</p>
+  <p class="share-actions">
+    <a class="btn" href="/captures/{{ capture_id }}/export.zip?lang={{ lang }}">
+      &darr; {{ _('web.detail.download_zip') }}
+    </a>
+    <a class="btn ghost" href="/captures/{{ capture_id }}/report.pdf?lang={{ lang }}" target="_blank" rel="noopener">
+      {{ _('web.detail.download_pdf') }}
+    </a>
+  </p>
+  <p class="dim">{{ _('web.detail.package_note') }}</p>
+</section>
+
 <section class="card">
   <h3>{{ _('web.detail.evidence') }}
     <button id="verify-btn" type="button" data-id="{{ capture_id }}">{{ _('web.detail.verify_btn') }}</button>

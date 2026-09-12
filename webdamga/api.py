@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import tempfile
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from starlette.background import BackgroundTask
 
 from . import __version__
 from .capture import capture as run_capture
@@ -22,6 +24,7 @@ from .i18n import (
     parse_accept_language,
     translator,
 )
+from .report import default_package_name, export_package, render_report_pdf
 from .storage import Store
 
 DATA_DIR = default_data_dir().resolve()
@@ -137,6 +140,41 @@ def capture_detail(request: Request, capture_id: str, lang: str = Depends(get_la
 @app.get("/captures/{capture_id}/verify")
 def capture_verify(capture_id: str) -> dict:
     return verify_capture(_capture_dir(capture_id))
+
+
+@app.get("/captures/{capture_id}/report.pdf")
+async def capture_report(capture_id: str, lang: str = Depends(get_lang)) -> Response:
+    """İnsan okur, kısa PDF kanıt raporu."""
+    cap_dir = _capture_dir(capture_id)
+    pdf = await render_report_pdf(cap_dir, _load_meta(capture_id), _load_manifest(capture_id), lang)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"content-disposition": f'inline; filename="webdamga-{capture_id}-report.pdf"'},
+    )
+
+
+@app.get("/captures/{capture_id}/export.zip")
+async def capture_export(capture_id: str, lang: str = Depends(get_lang)) -> FileResponse:
+    """Bütün delilleri, manifestoyu ve PDF raporu içeren gönderilebilir paket."""
+    cap_dir = _capture_dir(capture_id)
+    meta = _load_meta(capture_id)
+    tmp_dir = Path(tempfile.mkdtemp(prefix="webdamga-export-"))
+    name = default_package_name(capture_id)
+    package, digest = await export_package(cap_dir, meta, _load_manifest(capture_id), tmp_dir / name, lang)
+
+    def _cleanup() -> None:
+        package.unlink(missing_ok=True)
+        tmp_dir.rmdir()
+
+    return FileResponse(
+        str(package),
+        media_type="application/zip",
+        filename=name,
+        # Alıcının gönderdiği dosyayla eşleştirebilmesi için paket özeti.
+        headers={"x-webdamga-package-sha256": digest},
+        background=BackgroundTask(_cleanup),
+    )
 
 
 @app.get("/captures/{capture_id}/files/{name}")

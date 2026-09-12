@@ -102,12 +102,37 @@ webdamga list
 
 # Bir yakalamanın bütünlüğünü doğrula
 webdamga verify 20260910T142530Z-ornek-com-ab12cd
+
+# Birine göndermek üzere paketle
+webdamga export 20260910T142530Z-ornek-com-ab12cd
 ```
 
 `webdamga capture` çıkışta yakalama `id`'sini, nihai URL'yi, HTTP durumunu,
 sunucu IP'sini, TLS bilgisini ve `manifest.sha256` özetini yazar. Bu özeti
 ayrı bir yere (e-posta, ihbar formu, not) kaydetmek, delili daha sonra
 "bu klasör o gün buydu" diye kanıtlamayı sağlar.
+
+### Bir yakalamayı kanıt olarak gönderme
+
+`webdamga export <id>`, ihbara ekleyebileceğin tek bir `.zip` üretir:
+
+```
+webdamga-<id>.zip
+└── <id>/
+    ├── README.txt            bu nedir, webdamga olmadan nasıl doğrulanır
+    ├── evidence-report.pdf   okunur özet: URL'ler, TLS, ekran görüntüsü, özetler
+    └── …                     yakalamanın tüm delilleri ve manifestosu
+```
+
+Komut, paketin kendi SHA-256 özetini yazar. Bunu ihbarınla birlikte sakla ki
+karşı taraf eline geçen dosyanın senin gönderdiğin dosya olduğunu doğrulayabilsin.
+
+Karşı tarafın bu araca ihtiyacı yok. `README.txt`, delilleri `manifest.json`
+ile, `manifest.json`'u da `manifest.sha256` ile karşılaştırmayı düz `shasum`
+komutlarıyla anlatıyor.
+
+`README.txt` ve `evidence-report.pdf` paketleme sırasında üretildiği için
+`manifest.json`'da bilinçli olarak listelenmez. Diğer her şey listelidir.
 
 ### Web arayüzü
 
@@ -119,6 +144,7 @@ webdamga serve            # http://127.0.0.1:8000
 - Geçmiş yakalamaları gez
 - Ekran görüntüsü, metadata, yönlendirme zinciri, dosya listesi + SHA-256
 - **Bütünlüğü doğrula** düğmesi
+- **Kanıt olarak gönder**: `.zip` paketini ya da sadece PDF raporu indir
 
 ### JSON API
 
@@ -128,6 +154,8 @@ webdamga serve            # http://127.0.0.1:8000
 | `GET /api/captures/{id}` | Bir yakalamanın `metadata.json`'u |
 | `GET /captures/{id}/verify` | Bütünlük doğrulama sonucu (JSON) |
 | `GET /captures/{id}/files/{ad}` | Yakalama dosyasını indir (yalnızca manifestodaki adlar) |
+| `GET /captures/{id}/report.pdf` | PDF kanıt raporu |
+| `GET /captures/{id}/export.zip` | Tam kanıt paketi; SHA-256 özeti `x-webdamga-package-sha256` başlığında döner |
 
 ---
 
@@ -157,7 +185,7 @@ pytest
 - [ ] Tor / proxy üzerinden yakalama, ülke seçimi
 - [ ] Aynı URL'nin iki yakalamasını karşılaştırma (görsel + DOM diff)
 - [ ] Bir URL'yi zamanlanmış aralıklarla izleme
-- [ ] Tek sayfalık PDF delil raporu (ekran görüntüsü + hash'ler + metadata)
+- [x] PDF kanıt raporu ve gönderilebilir `.zip` paketi
 - [ ] Arka planda kuyruk + yakalama durumu (arayüzü kilitlememek için)
 
 ---

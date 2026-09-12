@@ -121,6 +121,117 @@ _EN: dict[str, str] = {
     "web.detail.requests.one": "{count} request",
     "web.detail.requests.other": "{count} requests",
     "web.detail.metadata_json": "metadata (JSON)",
+    # --- Sharing / export ---
+    "web.detail.share": "Send as evidence",
+    "web.detail.share.hint": (
+        "Download the whole capture as one package you can attach to an abuse report, "
+        "or just the PDF summary."
+    ),
+    "web.detail.download_zip": "Evidence package (.zip)",
+    "web.detail.download_pdf": "Report (PDF)",
+    "web.detail.package_note": (
+        "The package contains every artefact, the SHA-256 manifest and the PDF report. "
+        "Keep the package checksum shown after download alongside your report."
+    ),
+    # --- CLI export ---
+    "cli.export.help": "Export a capture as a single evidence package you can send.",
+    "cli.export.arg.id": "Capture id",
+    "cli.export.opt.output": "Output path (default: ./webdamga-<id>.zip)",
+    "cli.export.opt.pdf": "Include the PDF evidence report",
+    "cli.export.building_pdf": "rendering the PDF report…",
+    "cli.export.packaging": "packaging…",
+    "cli.export.written": "package",
+    "cli.export.size": "size",
+    "cli.export.sha": "package sha256",
+    "cli.export.manifest_sha": "manifest sha256",
+    "cli.export.done": "Attach this file to your report. The recipient can verify it "
+    "without webdamga, see README.txt inside the package.",
+    # --- PDF report ---
+    "report.title": "Web capture evidence report",
+    "report.generated": "Produced by webdamga v{version} on {date}",
+    "report.section.capture": "Capture",
+    "report.section.network": "Network and TLS",
+    "report.section.screenshot": "Screenshot",
+    "report.section.redirects": "Redirect chain",
+    "report.section.files": "Artefacts and SHA-256 checksums",
+    "report.section.verify": "How to verify this evidence",
+    "report.field.capture_id": "Capture id",
+    "report.field.requested_url": "Requested URL",
+    "report.field.final_url": "Final URL",
+    "report.field.http": "HTTP status",
+    "report.field.page_title": "Page title",
+    "report.field.requested_at": "Requested at (UTC)",
+    "report.field.completed_at": "Completed at (UTC)",
+    "report.field.server_ip": "Server IP",
+    "report.field.tls": "TLS",
+    "report.field.tls_valid": "Certificate validity",
+    "report.field.browser": "Browser",
+    "report.field.user_agent": "User-Agent",
+    "report.field.captured_by": "Captured on",
+    "report.field.resources": "Resources loaded",
+    "report.field.manifest_sha": "Manifest SHA-256",
+    "report.screenshot.caption": "Above the fold, as the page rendered at capture time. "
+    "The full page screenshot is included in the package as screenshot.png.",
+    "report.screenshot.missing": "No screenshot was produced for this capture.",
+    "report.verify.intro": "Every artefact in this package is listed in manifest.json "
+    "together with its SHA-256 checksum. To confirm nothing has been altered:",
+    "report.verify.step1": "Recompute the checksums and compare them with manifest.json.",
+    "report.verify.step2": "Confirm manifest.json itself still matches manifest.sha256.",
+    "report.verify.step3": "With webdamga installed, both steps run at once:",
+    "report.verify.note": "README.txt and evidence-report.pdf were added when the package "
+    "was built, so they are deliberately not listed in manifest.json.",
+    "report.footer": "This report describes what the named URL served at the stated time. "
+    "It is a technical record, not a legal opinion.",
+    "report.col.file": "File",
+    "report.col.size": "Size",
+    "report.col.sha256": "SHA-256",
+    "report.error": "This capture ended with an error",
+    # --- Package README.txt ---
+    "pkg.readme": """webdamga evidence package
+=========================
+
+Capture id : {capture_id}
+URL        : {url}
+Captured   : {captured} (UTC)
+Packaged   : {packaged} (UTC)
+
+WHAT IS IN HERE
+---------------
+This is a record of what {url} served at the time above. It was captured
+automatically with a real Chromium browser.
+
+  evidence-report.pdf     short human readable summary
+  screenshot.png          full page screenshot
+  screenshot-viewport.png what was visible without scrolling
+  response.html           the raw HTTP response body, before JavaScript
+  dom.html                the page after JavaScript had run
+  page.mhtml              self contained archive, opens in Chrome
+  page.pdf                the page printed to PDF
+  network.har             every request and response, bodies included
+  console.log             browser console output and page errors
+  metadata.json           URLs, redirects, headers, server IP, TLS, timing
+  manifest.json           SHA-256 of every file above
+  manifest.sha256         checksum of manifest.json itself
+
+HOW TO VERIFY IT
+----------------
+1. Recompute the checksums and compare against manifest.json:
+
+     shasum -a 256 screenshot.png dom.html response.html
+
+2. Confirm manifest.json has not been edited either:
+
+     shasum -a 256 -c manifest.sha256
+
+3. If you have webdamga installed, both checks run together:
+
+     webdamga verify {capture_id}
+
+README.txt and evidence-report.pdf were created while packaging, so they are
+not listed in manifest.json. Every other file is.
+
+Produced by webdamga v{version}. https://github.com/gorkemguler/webdamga
+""",
 }
 
 _TR: dict[str, str] = {
@@ -228,6 +339,117 @@ _TR: dict[str, str] = {
     "web.detail.requests.one": "{count} istek",
     "web.detail.requests.other": "{count} istek",
     "web.detail.metadata_json": "metadata (JSON)",
+    # --- Paylaşım / dışa aktarma ---
+    "web.detail.share": "Kanıt olarak gönder",
+    "web.detail.share.hint": (
+        "Yakalamanın tamamını ihbara ekleyebileceğin tek bir paket olarak indir, "
+        "ya da sadece PDF özeti al."
+    ),
+    "web.detail.download_zip": "Kanıt paketi (.zip)",
+    "web.detail.download_pdf": "Rapor (PDF)",
+    "web.detail.package_note": (
+        "Paket bütün delilleri, SHA-256 manifestosunu ve PDF raporu içerir. "
+        "İndirdikten sonra görünen paket özetini ihbarınla birlikte sakla."
+    ),
+    # --- CLI dışa aktarma ---
+    "cli.export.help": "Bir yakalamayı gönderilebilir tek bir kanıt paketi olarak dışa aktar.",
+    "cli.export.arg.id": "Yakalama id'si",
+    "cli.export.opt.output": "Çıktı yolu (varsayılan: ./webdamga-<id>.zip)",
+    "cli.export.opt.pdf": "PDF kanıt raporunu da ekle",
+    "cli.export.building_pdf": "PDF rapor hazırlanıyor…",
+    "cli.export.packaging": "paketleniyor…",
+    "cli.export.written": "paket",
+    "cli.export.size": "boyut",
+    "cli.export.sha": "paket sha256",
+    "cli.export.manifest_sha": "manifest sha256",
+    "cli.export.done": "Bu dosyayı ihbarına ekleyebilirsin. Karşı taraf webdamga "
+    "olmadan da doğrulayabilir, paketin içindeki README.txt'e bak.",
+    # --- PDF rapor ---
+    "report.title": "Web yakalama kanıt raporu",
+    "report.generated": "webdamga v{version} tarafından {date} tarihinde üretildi",
+    "report.section.capture": "Yakalama",
+    "report.section.network": "Ağ ve TLS",
+    "report.section.screenshot": "Ekran görüntüsü",
+    "report.section.redirects": "Yönlendirme zinciri",
+    "report.section.files": "Deliller ve SHA-256 özetleri",
+    "report.section.verify": "Bu kanıt nasıl doğrulanır",
+    "report.field.capture_id": "Yakalama id'si",
+    "report.field.requested_url": "İstenen URL",
+    "report.field.final_url": "Nihai URL",
+    "report.field.http": "HTTP durumu",
+    "report.field.page_title": "Sayfa başlığı",
+    "report.field.requested_at": "İstek zamanı (UTC)",
+    "report.field.completed_at": "Tamamlanma (UTC)",
+    "report.field.server_ip": "Sunucu IP",
+    "report.field.tls": "TLS",
+    "report.field.tls_valid": "Sertifika geçerliliği",
+    "report.field.browser": "Tarayıcı",
+    "report.field.user_agent": "User-Agent",
+    "report.field.captured_by": "Yakalayan makine",
+    "report.field.resources": "Yüklenen kaynaklar",
+    "report.field.manifest_sha": "Manifest SHA-256",
+    "report.screenshot.caption": "Yakalama anında sayfanın ekran üstünde göründüğü hâli. "
+    "Tam sayfa görüntü pakette screenshot.png olarak yer alıyor.",
+    "report.screenshot.missing": "Bu yakalamada ekran görüntüsü üretilemedi.",
+    "report.verify.intro": "Paketteki her delil, SHA-256 özetiyle birlikte manifest.json "
+    "içinde listelidir. Hiçbir şeyin değişmediğini doğrulamak için:",
+    "report.verify.step1": "Özetleri yeniden hesaplayıp manifest.json ile karşılaştırın.",
+    "report.verify.step2": "manifest.json'un kendisinin de manifest.sha256 ile eşleştiğini kontrol edin.",
+    "report.verify.step3": "webdamga kuruluysa iki adım tek komutla çalışır:",
+    "report.verify.note": "README.txt ve evidence-report.pdf paketleme sırasında eklendiği "
+    "için manifest.json'da bilinçli olarak yer almaz.",
+    "report.footer": "Bu rapor, adı geçen URL'nin belirtilen zamanda ne sunduğunu belgeler. "
+    "Teknik bir kayıttır, hukuki görüş değildir.",
+    "report.col.file": "Dosya",
+    "report.col.size": "Boyut",
+    "report.col.sha256": "SHA-256",
+    "report.error": "Bu yakalama hatayla sonuçlandı",
+    # --- Paket içi README.txt ---
+    "pkg.readme": """webdamga kanıt paketi
+=====================
+
+Yakalama id : {capture_id}
+URL         : {url}
+Yakalanma   : {captured} (UTC)
+Paketlenme  : {packaged} (UTC)
+
+PAKETTE NE VAR
+--------------
+Bu paket, {url} adresinin yukarıdaki zamanda ne sunduğunun kaydıdır.
+Gerçek bir Chromium tarayıcısıyla otomatik olarak alınmıştır.
+
+  evidence-report.pdf     kısa, insan okur özet
+  screenshot.png          tam sayfa ekran görüntüsü
+  screenshot-viewport.png kaydırmadan görünen kısım
+  response.html           ham HTTP yanıt gövdesi, JavaScript öncesi
+  dom.html                JavaScript çalıştıktan sonraki sayfa
+  page.mhtml              kendi kendine yeten arşiv, Chrome'da açılır
+  page.pdf                sayfanın PDF çıktısı
+  network.har             tüm istek ve yanıtlar, gövdeler dahil
+  console.log             tarayıcı konsolu ve sayfa hataları
+  metadata.json           URL'ler, yönlendirmeler, başlıklar, sunucu IP, TLS
+  manifest.json           yukarıdaki her dosyanın SHA-256 özeti
+  manifest.sha256         manifest.json'un kendi özeti
+
+NASIL DOĞRULANIR
+----------------
+1. Özetleri yeniden hesaplayıp manifest.json ile karşılaştırın:
+
+     shasum -a 256 screenshot.png dom.html response.html
+
+2. manifest.json'un da değişmediğini kontrol edin:
+
+     shasum -a 256 -c manifest.sha256
+
+3. webdamga kuruluysa iki kontrol tek komutta çalışır:
+
+     webdamga verify {capture_id}
+
+README.txt ve evidence-report.pdf paketleme sırasında oluşturulduğu için
+manifest.json'da listelenmez. Diğer tüm dosyalar listelidir.
+
+webdamga v{version} ile üretildi. https://github.com/gorkemguler/webdamga
+""",
 }
 
 _CATALOG: dict[str, dict[str, str]] = {"en": _EN, "tr": _TR}
