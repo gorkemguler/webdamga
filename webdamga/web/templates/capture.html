@@ -1,52 +1,66 @@
 {% extends "base.html" %}
 {% block title %}{{ capture_id }} &middot; webdamga{% endblock %}
 {% block body %}
-<p><a href="/">&larr; tüm yakalamalar</a></p>
+<p><a href="/">&larr; {{ _('web.nav.all_captures') }}</a></p>
 <h2><code>{{ capture_id }}</code></h2>
 {% if m.error %}<div class="banner err">{{ m.error }}</div>{% endif %}
 
 <div class="grid">
   <section class="card">
-    <h3>Özet</h3>
+    <h3>{{ _('web.detail.summary') }}</h3>
     <dl>
-      <dt>istenen URL</dt><dd>{{ m.requested_url }}</dd>
-      <dt>nihai URL</dt><dd>{{ m.final_url }}</dd>
-      <dt>HTTP</dt><dd>{{ m.http_status }} {{ m.http_status_text }}</dd>
-      <dt>başlık</dt><dd>{{ m.page_title }}</dd>
-      <dt>istek</dt><dd>{{ m.requested_at_utc }}</dd>
-      <dt>tamamlanma</dt><dd>{{ m.completed_at_utc }}</dd>
-      {% if m.remote_address %}<dt>sunucu IP</dt><dd>{{ m.remote_address.ipAddress }}:{{ m.remote_address.port }}</dd>{% endif %}
-      {% if m.tls %}<dt>TLS</dt><dd>{{ m.tls.protocol }}<br><span class="dim">{{ m.tls.issuer }} &rarr; {{ m.tls.subjectName }}</span><br><span class="dim">{{ m.tls.validFrom_iso or m.tls.validFrom }} &ndash; {{ m.tls.validTo_iso or m.tls.validTo }}</span></dd>{% endif %}
-      {% if m.resource_summary %}<dt>kaynaklar</dt><dd>{{ m.resource_summary.request_count }} istek &middot; {{ (m.resource_summary.transfer_bytes / 1024) | round(1) }} KB</dd>{% endif %}
-      <dt>tarayıcı</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>
-      <dt>User-Agent</dt><dd class="dim">{{ m.user_agent }}</dd>
-      <dt>yakalayan</dt><dd class="dim">{{ m.capture_host.hostname }} &middot; {{ m.capture_host.platform }}</dd>
+      <dt>{{ _('web.detail.requested_url') }}</dt><dd>{{ m.requested_url }}</dd>
+      <dt>{{ _('web.detail.final_url') }}</dt><dd>{{ m.final_url }}</dd>
+      <dt>{{ _('web.detail.http') }}</dt><dd>{{ m.http_status }} {{ m.http_status_text }}</dd>
+      <dt>{{ _('web.detail.title') }}</dt><dd>{{ m.page_title }}</dd>
+      <dt>{{ _('web.detail.requested_at') }}</dt><dd>{{ m.requested_at_utc }}</dd>
+      <dt>{{ _('web.detail.completed_at') }}</dt><dd>{{ m.completed_at_utc }}</dd>
+      {% if m.remote_address %}<dt>{{ _('web.detail.server_ip') }}</dt><dd>{{ m.remote_address.ipAddress }}:{{ m.remote_address.port }}</dd>{% endif %}
+      {% if m.tls %}<dt>{{ _('web.detail.tls') }}</dt><dd>{{ m.tls.protocol }}<br><span class="dim">{{ m.tls.issuer }} &rarr; {{ m.tls.subjectName }}</span><br><span class="dim">{{ m.tls.validFrom_iso or m.tls.validFrom }} &ndash; {{ m.tls.validTo_iso or m.tls.validTo }}</span></dd>{% endif %}
+      {% if m.resource_summary %}<dt>{{ _('web.detail.resources') }}</dt><dd>{{ _('web.detail.requests', count=m.resource_summary.request_count or 0) }} &middot; {{ (m.resource_summary.transfer_bytes / 1024) | round(1) }} KB</dd>{% endif %}
+      <dt>{{ _('web.detail.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>
+      <dt>{{ _('web.detail.user_agent') }}</dt><dd class="dim">{{ m.user_agent }}</dd>
+      <dt>{{ _('web.detail.captured_by') }}</dt><dd class="dim">{{ m.capture_host.hostname }} &middot; {{ m.capture_host.platform }}</dd>
     </dl>
   </section>
 
   <section class="card">
-    <h3>Ekran görüntüsü</h3>
+    <h3>{{ _('web.detail.screenshot') }}</h3>
     <a href="/captures/{{ capture_id }}/files/screenshot.png" target="_blank" rel="noopener">
-      <img class="shot" src="/captures/{{ capture_id }}/files/screenshot.png" alt="ekran görüntüsü">
+      <img class="shot" src="/captures/{{ capture_id }}/files/screenshot.png" alt="{{ _('web.detail.screenshot_alt') }}">
     </a>
   </section>
 </div>
 
 {% if m.redirect_chain %}
 <section class="card">
-  <h3>Yönlendirme zinciri</h3>
+  <h3>{{ _('web.detail.redirect_chain') }}</h3>
   <ol class="chain">
     {% for r in m.redirect_chain %}<li><b>{{ r.status }}</b> <code>{{ r.url }}</code></li>{% endfor %}
-    <li><b>{{ m.http_status }}</b> <code>{{ m.final_url }}</code> <span class="dim">(nihai)</span></li>
+    <li><b>{{ m.http_status }}</b> <code>{{ m.final_url }}</code> <span class="dim">{{ _('web.detail.final_marker') }}</span></li>
   </ol>
 </section>
 {% endif %}
 
 <section class="card">
-  <h3>Deliller &amp; SHA-256 <button id="verify-btn" type="button" data-id="{{ capture_id }}">Bütünlüğü doğrula</button></h3>
-  <div id="verify-out"></div>
+  <h3>{{ _('web.detail.evidence') }}
+    <button id="verify-btn" type="button" data-id="{{ capture_id }}">{{ _('web.detail.verify_btn') }}</button>
+  </h3>
+  <div id="verify-out"
+       data-verifying="{{ _('web.detail.verifying') }}"
+       data-intact="{{ _('web.detail.intact') }}"
+       data-broken="{{ _('web.detail.broken') }}"
+       data-failed="{{ _('web.detail.verify_failed') }}"
+       data-status-ok="{{ _('web.status.ok') }}"
+       data-status-modified="{{ _('web.status.modified') }}"
+       data-status-missing="{{ _('web.status.missing') }}"
+       data-status-unlisted="{{ _('web.status.unlisted') }}"></div>
   <table class="list">
-    <thead><tr><th>dosya</th><th class="nowrap">boyut</th><th>SHA-256</th></tr></thead>
+    <thead><tr>
+      <th>{{ _('web.col.file') }}</th>
+      <th class="nowrap">{{ _('web.col.size') }}</th>
+      <th>{{ _('web.col.sha256') }}</th>
+    </tr></thead>
     <tbody>
     {% for f in manifest.files %}
       <tr>
@@ -60,7 +74,7 @@
   <p class="dim">
     <a href="/captures/{{ capture_id }}/files/manifest.json" target="_blank" rel="noopener">manifest.json</a> &middot;
     <a href="/captures/{{ capture_id }}/files/manifest.sha256" target="_blank" rel="noopener">manifest.sha256</a> &middot;
-    <a href="/api/captures/{{ capture_id }}" target="_blank" rel="noopener">metadata (JSON)</a>
+    <a href="/api/captures/{{ capture_id }}" target="_blank" rel="noopener">{{ _('web.detail.metadata_json') }}</a>
   </p>
 </section>
 
@@ -68,18 +82,24 @@
   document.getElementById('verify-btn').addEventListener('click', async function (e) {
     var id = e.target.dataset.id;
     var out = document.getElementById('verify-out');
-    out.textContent = 'Doğrulanıyor…';
+    var labels = {
+      ok: out.dataset.statusOk,
+      modified: out.dataset.statusModified,
+      missing: out.dataset.statusMissing,
+      unlisted: out.dataset.statusUnlisted
+    };
+    out.textContent = out.dataset.verifying;
     try {
       var res = await fetch('/captures/' + id + '/verify');
       var data = await res.json();
-      var head = data.ok
-        ? '<div class="banner ok">BÜTÜN — hiçbir dosya değiştirilmemiş.</div>'
-        : '<div class="banner err">BOZULMUŞ — klasörde değişiklik tespit edildi.</div>';
+      var head = '<div class="banner ' + (data.ok ? 'ok' : 'err') + '">' +
+        (data.ok ? out.dataset.intact : out.dataset.broken) + '</div>';
       out.innerHTML = head + '<ul class="verify-list">' +
-        data.files.map(function (f) { return '<li><code>' + f.name + '</code> — <b>' + f.status + '</b></li>'; }).join('') +
-        '</ul>';
+        data.files.map(function (f) {
+          return '<li><code>' + f.name + '</code>: <b>' + (labels[f.status] || f.status) + '</b></li>';
+        }).join('') + '</ul>';
     } catch (err) {
-      out.innerHTML = '<div class="banner err">Doğrulama başarısız: ' + err + '</div>';
+      out.innerHTML = '<div class="banner err">' + out.dataset.failed + ' ' + err + '</div>';
     }
   });
 </script>

@@ -17,7 +17,33 @@ CERT, banka) sayfanın o anki halini oynanmamış biçimde kayıt altına almak.
 
 | Yakalama başlat / geçmiş | Kanıt + SHA-256 doğrulama |
 | --- | --- |
-| ![Ana sayfa: yeni yakalama formu ve geçmiş yakalamalar listesi](docs/screenshots/index.png) | ![Yakalama detayı: özet, ekran görüntüsü, dosya listesi ve bütünlük doğrulama sonucu](docs/screenshots/capture-detail.png) |
+| ![Ana sayfa: yeni yakalama formu ve geçmiş yakalamalar listesi](docs/screenshots/index-tr.png) | ![Yakalama detayı: özet, ekran görüntüsü, dosya listesi ve bütünlük doğrulama sonucu](docs/screenshots/capture-detail-tr.png) |
+
+---
+
+## Dil
+
+Hem CLI hem web arayüzü **Türkçe ve İngilizce** konuşuyor. Varsayılan
+İngilizce; ortamın ya da tarayıcın Türkçe istiyorsa otomatik olarak Türkçeye
+geçiyor.
+
+```bash
+webdamga --lang tr capture https://ornek.com     # bu çalıştırma Türkçe
+WEBDAMGA_LANG=tr webdamga --help                 # yardım metinleri de Türkçe
+```
+
+| Arayüz | Dil nasıl seçilir (ilk eşleşen kazanır) |
+| --- | --- |
+| CLI | `--lang` → `WEBDAMGA_LANG` → sistem locale (`LC_ALL` / `LANG`) → İngilizce |
+| Web | `?lang=` → `webdamga_lang` çerezi → `Accept-Language` → İngilizce |
+
+Web arayüzünün sağ üstünde **EN / TR** düğmesi var, tercih çerezde saklandığı
+için kalıcı. CLI'daki yardım metinleri süreç başlarken kurulduğu için onları
+`--lang` değil, ortam değişkeni değiştirir.
+
+Yeni bir dil eklemek [`webdamga/i18n.py`](webdamga/i18n.py) içine bir sözlük
+eklemek demek; bir test her dilin birebir aynı anahtarları tanımladığını
+kontrol ediyor, yani arayüz yarım çeviri kalamıyor.
 
 ---
 

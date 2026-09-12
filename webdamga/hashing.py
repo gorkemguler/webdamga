@@ -4,7 +4,7 @@ Bir yakalama klasörünün tamamı `manifest.json` içinde listelenen dosya
 adları + boyutları + SHA-256 özetleriyle "mühürlenir". `manifest.sha256`
 sidecar dosyası manifestonun kendi özetini tutar. `verify_capture` her iki
 katmanı da yeniden hesaplayıp değişiklik/eksik/fazla dosya olup olmadığını
-raporlar — delilin sonradan oynanmadığını göstermek için.
+raporlar, delilin sonradan oynanmadığını göstermek için.
 """
 
 from __future__ import annotations

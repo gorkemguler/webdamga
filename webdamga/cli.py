@@ -1,4 +1,9 @@
-"""webdamga komut satırı arayüzü."""
+"""webdamga komut satırı arayüzü.
+
+Yardım metinleri süreç başlarken tespit edilen dile göre kurulur
+(`WEBDAMGA_LANG` ya da sistem locale). Çalışma zamanı çıktılarının dili
+ayrıca `webdamga --lang tr ...` ile değiştirilebilir.
+"""
 
 from __future__ import annotations
 
@@ -14,32 +19,61 @@ from .capture import capture as run_capture
 from .capture import normalize_url
 from .config import CaptureSettings, default_data_dir
 from .hashing import verify_capture
+from .i18n import SUPPORTED_LANGS, detect_lang, normalize_lang, t, tn
 from .storage import Store
 
-app = typer.Typer(add_completion=False, help="webdamga — yerel web kanıt/arşiv aracı")
+# Yardım metinleri decorator zamanında kurulduğu için ortamdan gelen dile bağlı.
+_HELP_LANG = detect_lang()
+_runtime_lang = _HELP_LANG
+
+
+def _h(key: str) -> str:
+    return t(key, _HELP_LANG)
+
+
+def _lang() -> str:
+    return _runtime_lang
+
+
+app = typer.Typer(add_completion=False, help=_h("cli.app.help"))
 console = Console()
 
-_DataDir = typer.Option(None, "--data-dir", "-d", help="Veri klasörü (varsayılan: ./data)")
+_DataDir = typer.Option(None, "--data-dir", "-d", help=_h("cli.opt.data_dir"))
 
 
 def _resolve_data_dir(value: Path | None) -> Path:
     return Path(value) if value else default_data_dir()
 
 
-@app.command()
-def capture(
-    url: str = typer.Argument(..., help="Yakalanacak URL"),
-    data_dir: Path | None = _DataDir,
-    full_page: bool = typer.Option(True, "--full-page/--no-full-page", help="Tam sayfa ekran görüntüsü"),
-    timeout: int = typer.Option(30, "--timeout", "-t", help="Gezinme zaman aşımı (sn)"),
-    wait_until: str = typer.Option("load", "--wait-until", help="load|domcontentloaded|networkidle|commit"),
-    wait: float = typer.Option(1.5, "--wait", help="Yükleme sonrası ek bekleme (sn)"),
-    width: int = typer.Option(1280, "--width", help="Görünüm genişliği"),
-    height: int = typer.Option(800, "--height", help="Görünüm yüksekliği"),
-    user_agent: str | None = typer.Option(None, "--user-agent", "-A", help="User-Agent'ı geçersiz kıl"),
-    headful: bool = typer.Option(False, "--headful", help="Tarayıcıyı görünür çalıştır (PDF üretilmez)"),
+@app.callback()
+def _root(
+    lang: str | None = typer.Option(None, "--lang", "-L", help=_h("cli.opt.lang")),
 ) -> None:
-    """Bir URL'yi yakala ve kanıt klasörünü mühürle."""
+    """webdamga."""
+    global _runtime_lang
+    if lang:
+        resolved = normalize_lang(lang)
+        if not resolved:
+            console.print(f"[red]?[/] --lang: {lang} ({', '.join(SUPPORTED_LANGS)})")
+            raise typer.Exit(2)
+        _runtime_lang = resolved
+
+
+@app.command(help=_h("cli.capture.help"))
+def capture(
+    url: str = typer.Argument(..., help=_h("cli.capture.arg.url")),
+    data_dir: Path | None = _DataDir,
+    full_page: bool = typer.Option(True, "--full-page/--no-full-page", help=_h("cli.capture.opt.full_page")),
+    timeout: int = typer.Option(30, "--timeout", "-t", help=_h("cli.capture.opt.timeout")),
+    wait_until: str = typer.Option("load", "--wait-until", help=_h("cli.capture.opt.wait_until")),
+    wait: float = typer.Option(1.5, "--wait", help=_h("cli.capture.opt.wait")),
+    width: int = typer.Option(1280, "--width", help=_h("cli.capture.opt.width")),
+    height: int = typer.Option(800, "--height", help=_h("cli.capture.opt.height")),
+    user_agent: str | None = typer.Option(None, "--user-agent", "-A", help=_h("cli.capture.opt.user_agent")),
+    headful: bool = typer.Option(False, "--headful", help=_h("cli.capture.opt.headful")),
+) -> None:
+    """Capture a URL and seal the evidence folder."""
+    lang = _lang()
     ddir = _resolve_data_dir(data_dir)
     settings = CaptureSettings(
         wait_until=wait_until,
@@ -55,7 +89,7 @@ def capture(
         settings.user_agent = user_agent
 
     store = Store(ddir)
-    console.print(f"[bold]webdamga[/] yakalıyor → [cyan]{normalize_url(url)}[/]")
+    console.print(f"[bold]webdamga[/] {t('cli.capture.capturing', lang)} → [cyan]{normalize_url(url)}[/]")
     meta = asyncio.run(run_capture(url, ddir, settings))
     store.record(
         meta,
@@ -67,102 +101,118 @@ def capture(
     table = Table(show_header=False, box=None, pad_edge=False)
     table.add_column(style="dim")
     table.add_column(overflow="fold")
-    table.add_row("id", meta["capture_id"])
-    table.add_row("nihai URL", str(meta.get("final_url")))
-    table.add_row("HTTP", f"{meta.get('http_status')} {meta.get('http_status_text', '')}".strip())
-    table.add_row("başlık", str(meta.get("page_title")))
+    table.add_row(t("cli.field.id", lang), meta["capture_id"])
+    table.add_row(t("cli.field.final_url", lang), str(meta.get("final_url")))
+    table.add_row(
+        t("cli.field.http", lang),
+        f"{meta.get('http_status')} {meta.get('http_status_text', '')}".strip(),
+    )
+    table.add_row(t("cli.field.title", lang), str(meta.get("page_title")))
     addr = meta.get("remote_address") or {}
     if addr:
-        table.add_row("sunucu IP", f"{addr.get('ipAddress')}:{addr.get('port')}")
+        table.add_row(t("cli.field.server_ip", lang), f"{addr.get('ipAddress')}:{addr.get('port')}")
     tls = meta.get("tls") or {}
     if tls:
-        table.add_row("TLS", f"{tls.get('protocol')} · {tls.get('issuer')}")
+        table.add_row(t("cli.field.tls", lang), f"{tls.get('protocol')} · {tls.get('issuer')}")
     rs = meta.get("resource_summary") or {}
     if rs:
         table.add_row(
-            "kaynaklar", f"{rs.get('request_count')} istek · {rs.get('transfer_bytes', 0) / 1024:.1f} KB"
+            t("cli.field.resources", lang),
+            tn(
+                "cli.resources.value",
+                rs.get("request_count", 0),
+                lang,
+                kb=f"{rs.get('transfer_bytes', 0) / 1024:.1f}",
+            ),
         )
-    table.add_row("klasör", meta["dir"])
-    table.add_row("manifest sha256", meta.get("manifest_sha256", "-"))
+    table.add_row(t("cli.field.folder", lang), meta["dir"])
+    table.add_row(t("cli.field.manifest", lang), meta.get("manifest_sha256", "-"))
     console.print(table)
     if meta.get("error"):
-        console.print(f"[yellow]uyarı:[/] {meta['error']}")
+        console.print(f"[yellow]{t('cli.warning', lang)}[/] {meta['error']}")
 
 
-@app.command("list")
+@app.command("list", help=_h("cli.list.help"))
 def list_captures(
     data_dir: Path | None = _DataDir,
-    limit: int = typer.Option(20, "--limit", "-n", help="Gösterilecek kayıt sayısı"),
+    limit: int = typer.Option(20, "--limit", "-n", help=_h("cli.list.opt.limit")),
 ) -> None:
-    """Son yakalamaları listele."""
+    """List recent captures."""
+    lang = _lang()
     store = Store(_resolve_data_dir(data_dir))
     rows = store.list(limit)
     if not rows:
-        console.print("[dim]Kayıt yok.[/]")
+        console.print(f"[dim]{t('cli.list.empty', lang)}[/]")
         raise typer.Exit()
     table = Table()
-    table.add_column("id", style="cyan", no_wrap=True)
-    table.add_column("URL", overflow="fold")
-    table.add_column("HTTP", justify="right")
-    table.add_column("tarih (UTC)", no_wrap=True)
+    table.add_column(t("cli.col.id", lang), style="cyan", no_wrap=True)
+    table.add_column(t("cli.col.url", lang), overflow="fold")
+    table.add_column(t("cli.col.http", lang), justify="right")
+    table.add_column(t("cli.col.date_utc", lang), no_wrap=True)
     for row in rows:
         mark = "" if row["ok"] else " [red]✗[/]"
         table.add_row(
             row["id"] + mark,
             row["final_url"] or row["requested_url"],
-            str(row["http_status"] or "—"),
+            str(row["http_status"] or "-"),
             row["created_utc"],
         )
     console.print(table)
 
 
-@app.command()
+@app.command(help=_h("cli.verify.help"))
 def verify(
-    capture_id: str = typer.Argument(..., help="Yakalama id'si"),
+    capture_id: str = typer.Argument(..., help=_h("cli.verify.arg.id")),
     data_dir: Path | None = _DataDir,
 ) -> None:
-    """Bir yakalama klasörünü manifestoya göre doğrula (bütünlük kontrolü)."""
+    """Verify a capture folder against its manifest."""
+    lang = _lang()
     cap_dir = _resolve_data_dir(data_dir) / "captures" / capture_id
     if not cap_dir.is_dir():
-        console.print(f"[red]Bulunamadı:[/] {cap_dir}")
+        console.print(f"[red]{t('cli.verify.not_found', lang)}[/] {cap_dir}")
         raise typer.Exit(1)
 
     result = verify_capture(cap_dir)
-    table = Table(title=f"doğrulama · {capture_id}")
-    table.add_column("dosya", style="cyan")
-    table.add_column("durum")
+    table = Table(title=f"{t('cli.verify.title', lang)} · {capture_id}")
+    table.add_column(t("cli.col.file", lang), style="cyan")
+    table.add_column(t("cli.col.status", lang))
     palette = {"ok": "green", "modified": "red", "missing": "red", "unlisted": "yellow"}
     for item in result["files"]:
-        color = palette.get(item["status"], "white")
-        table.add_row(item["name"], f"[{color}]{item['status']}[/]")
+        status = item["status"]
+        color = palette.get(status, "white")
+        table.add_row(item["name"], f"[{color}]{t(f'web.status.{status}', lang)}[/]")
     console.print(table)
     if result["ok"]:
-        console.print("\n[green]BÜTÜN[/] — hiçbir dosya değiştirilmemiş.")
+        console.print(f"\n[green]{t('cli.verify.intact', lang)}[/]")
         raise typer.Exit(0)
-    console.print("\n[red]BOZULMUŞ[/] — yakalama klasöründe değişiklik var.")
+    console.print(f"\n[red]{t('cli.verify.broken', lang)}[/]")
     raise typer.Exit(2)
 
 
-@app.command()
+@app.command(help=_h("cli.serve.help"))
 def serve(
-    host: str = typer.Option("127.0.0.1", "--host", help="Dinlenecek arayüz"),
-    port: int = typer.Option(8000, "--port", "-p"),
+    host: str = typer.Option("127.0.0.1", "--host", help=_h("cli.serve.opt.host")),
+    port: int = typer.Option(8000, "--port", "-p", help=_h("cli.serve.opt.port")),
     data_dir: Path | None = _DataDir,
 ) -> None:
-    """Yerel web arayüzünü başlat."""
+    """Start the local web interface."""
     import os
 
     import uvicorn
 
+    lang = _lang()
     ddir = _resolve_data_dir(data_dir).resolve()
     os.environ["WEBDAMGA_DATA_DIR"] = str(ddir)
-    console.print(f"[bold]webdamga[/] arayüz → http://{host}:{port}  (veri: {ddir})")
+    console.print(
+        f"[bold]webdamga[/] {t('cli.serve.starting', lang)} → http://{host}:{port}"
+        f"  ({t('cli.serve.data', lang)}: {ddir})"
+    )
     uvicorn.run("webdamga.api:app", host=host, port=port, reload=False)
 
 
-@app.command()
+@app.command(help=_h("cli.version.help"))
 def version() -> None:
-    """Sürümü yazdır."""
+    """Print the version."""
     console.print(f"webdamga {__version__}")
 
 

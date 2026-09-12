@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="tr">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -9,7 +9,14 @@
 <body>
   <header>
     <a href="/" class="brand">web<span>damga</span></a>
-    <span class="tag">yerel web kanıt aracı &middot; v{{ version }}</span>
+    <span class="tag">{{ _('web.tagline') }} &middot; v{{ version }}</span>
+    <nav class="langs">
+      {% for code in langs %}
+        <a href="?lang={{ code }}"
+           class="lang{{ ' on' if code == lang }}"
+           {% if code == lang %}aria-current="true"{% endif %}>{{ code|upper }}</a>
+      {% endfor %}
+    </nav>
   </header>
   <main>{% block body %}{% endblock %}</main>
 </body>

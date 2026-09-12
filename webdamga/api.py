@@ -1,11 +1,11 @@
-"""FastAPI uygulaması — yakalama başlatma ve gezinme için yerel web arayüzü."""
+"""FastAPI uygulaması, yakalama başlatma ve gezinme için yerel web arayüzü."""
 
 from __future__ import annotations
 
 import json
 from pathlib import Path
 
-from fastapi import FastAPI, Form, HTTPException, Request
+from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
@@ -14,6 +14,14 @@ from . import __version__
 from .capture import capture as run_capture
 from .config import CaptureSettings, default_data_dir
 from .hashing import MANIFEST_NAME, MANIFEST_SIDECAR, verify_capture
+from .i18n import (
+    DEFAULT_LANG,
+    LANG_COOKIE,
+    SUPPORTED_LANGS,
+    normalize_lang,
+    parse_accept_language,
+    translator,
+)
 from .storage import Store
 
 DATA_DIR = default_data_dir().resolve()
@@ -25,18 +33,50 @@ app.mount("/static", StaticFiles(directory=str(_BASE / "web" / "static")), name=
 
 _store = Store(DATA_DIR)
 
+_COOKIE_MAX_AGE = 60 * 60 * 24 * 365
+
+
+def get_lang(request: Request) -> str:
+    """Sırasıyla ?lang=, çerez, Accept-Language, varsayılan."""
+    explicit = normalize_lang(request.query_params.get("lang"))
+    if explicit:
+        return explicit
+    stored = normalize_lang(request.cookies.get(LANG_COOKIE))
+    if stored:
+        return stored
+    accepted = parse_accept_language(request.headers.get("accept-language"))
+    return accepted or DEFAULT_LANG
+
+
+def _render(request: Request, template: str, lang: str, context: dict) -> HTMLResponse:
+    response = _templates.TemplateResponse(
+        request,
+        template,
+        {
+            **context,
+            "lang": lang,
+            "langs": SUPPORTED_LANGS,
+            "_": translator(lang),
+            "version": __version__,
+        },
+    )
+    # ?lang= ile açık seçim yapıldıysa tercihi hatırla.
+    if normalize_lang(request.query_params.get("lang")):
+        response.set_cookie(LANG_COOKIE, lang, max_age=_COOKIE_MAX_AGE, httponly=False, samesite="lax")
+    return response
+
 
 def _capture_dir(capture_id: str) -> Path:
     cap_dir = (DATA_DIR / "captures" / capture_id).resolve()
     if cap_dir.parent != (DATA_DIR / "captures").resolve() or not cap_dir.is_dir():
-        raise HTTPException(status_code=404, detail="yakalama bulunamadı")
+        raise HTTPException(status_code=404, detail="capture not found")
     return cap_dir
 
 
 def _load_meta(capture_id: str) -> dict:
     meta_path = _capture_dir(capture_id) / "metadata.json"
     if not meta_path.is_file():
-        raise HTTPException(status_code=404, detail="metadata.json yok")
+        raise HTTPException(status_code=404, detail="metadata.json missing")
     return json.loads(meta_path.read_text(encoding="utf-8"))
 
 
@@ -48,12 +88,8 @@ def _load_manifest(capture_id: str) -> dict:
 
 
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request) -> HTMLResponse:
-    return _templates.TemplateResponse(
-        request,
-        "index.html",
-        {"captures": _store.list(200), "version": __version__},
-    )
+def index(request: Request, lang: str = Depends(get_lang)) -> HTMLResponse:
+    return _render(request, "index.html", lang, {"captures": _store.list(200)})
 
 
 @app.post("/captures")
@@ -85,15 +121,15 @@ async def create_capture(
 
 
 @app.get("/captures/{capture_id}", response_class=HTMLResponse)
-def capture_detail(request: Request, capture_id: str) -> HTMLResponse:
-    return _templates.TemplateResponse(
+def capture_detail(request: Request, capture_id: str, lang: str = Depends(get_lang)) -> HTMLResponse:
+    return _render(
         request,
         "capture.html",
+        lang,
         {
             "m": _load_meta(capture_id),
             "manifest": _load_manifest(capture_id),
             "capture_id": capture_id,
-            "version": __version__,
         },
     )
 
@@ -109,7 +145,7 @@ def capture_file(capture_id: str, name: str) -> FileResponse:
     allowed = {MANIFEST_NAME, MANIFEST_SIDECAR}
     allowed |= {entry["name"] for entry in _load_manifest(capture_id).get("files", [])}
     if name not in allowed:
-        raise HTTPException(status_code=404, detail="dosya bu yakalamada yok")
+        raise HTTPException(status_code=404, detail="no such file in this capture")
     path = (cap_dir / name).resolve()
     if path.parent != cap_dir or not path.is_file():
         raise HTTPException(status_code=404)

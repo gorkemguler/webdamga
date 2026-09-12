@@ -1,11 +1,12 @@
 {% extends "base.html" %}
 {% block body %}
 <section class="card">
-  <h2>Yeni yakalama</h2>
-  <form method="post" action="/captures" class="capture-form" id="capture-form">
-    <input type="url" name="url" placeholder="https://ornek.com/giris" required autofocus autocomplete="off">
+  <h2>{{ _('web.index.new_capture') }}</h2>
+  <form method="post" action="/captures" class="capture-form" id="capture-form"
+        data-submitting="{{ _('web.index.submitting') }}">
+    <input type="url" name="url" placeholder="{{ _('web.index.url_placeholder') }}" required autofocus autocomplete="off">
     <div class="opts">
-      <label>wait-until
+      <label>{{ _('web.index.wait_until') }}
         <select name="wait_until">
           <option value="load" selected>load</option>
           <option value="domcontentloaded">domcontentloaded</option>
@@ -13,32 +14,38 @@
           <option value="commit">commit</option>
         </select>
       </label>
-      <label>zaman aşımı (sn)<input type="number" name="timeout" value="30" min="5" max="120"></label>
-      <label>ek bekleme (sn)<input type="number" step="0.5" name="wait" value="1.5" min="0" max="30"></label>
-      <label>genişlik<input type="number" name="width" value="1280" min="320" max="3840"></label>
-      <label>yükseklik<input type="number" name="height" value="800" min="320" max="4320"></label>
-      <label class="chk"><input type="checkbox" name="full_page" value="true" checked> tam sayfa</label>
+      <label>{{ _('web.index.timeout') }}<input type="number" name="timeout" value="30" min="5" max="120"></label>
+      <label>{{ _('web.index.extra_wait') }}<input type="number" step="0.5" name="wait" value="1.5" min="0" max="30"></label>
+      <label>{{ _('web.index.width') }}<input type="number" name="width" value="1280" min="320" max="3840"></label>
+      <label>{{ _('web.index.height') }}<input type="number" name="height" value="800" min="320" max="4320"></label>
+      <label class="chk"><input type="checkbox" name="full_page" value="true" checked> {{ _('web.index.full_page') }}</label>
     </div>
-    <button type="submit">Yakala</button>
-    <p class="hint">Yakalama 5&ndash;30 sn sürebilir; bu sürede sayfa yanıt vermez.</p>
+    <button type="submit">{{ _('web.index.submit') }}</button>
+    <p class="hint">{{ _('web.index.hint') }}</p>
   </form>
 </section>
 
 <section class="card">
-  <h2>Yakalamalar <span class="dim">({{ captures|length }})</span></h2>
+  <h2>{{ _('web.index.captures') }} <span class="dim">({{ captures|length }})</span></h2>
   <table class="list">
-    <thead><tr><th>id</th><th>URL</th><th>HTTP</th><th>tarih (UTC)</th><th></th></tr></thead>
+    <thead><tr>
+      <th>{{ _('web.col.id') }}</th>
+      <th>{{ _('web.col.url') }}</th>
+      <th>{{ _('web.col.http') }}</th>
+      <th>{{ _('web.col.date_utc') }}</th>
+      <th></th>
+    </tr></thead>
     <tbody>
     {% for c in captures %}
       <tr class="{{ 'err' if not c.ok }}">
         <td><a href="/captures/{{ c.id }}"><code>{{ c.id }}</code></a></td>
         <td class="url">{{ c.final_url or c.requested_url }}</td>
-        <td>{{ c.http_status or '—' }}</td>
+        <td>{{ c.http_status or '-' }}</td>
         <td class="nowrap">{{ c.created_utc }}</td>
-        <td>{% if not c.ok %}<span class="badge err">hata</span>{% endif %}</td>
+        <td>{% if not c.ok %}<span class="badge err">{{ _('web.badge.error') }}</span>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="5" class="dim">Henüz yakalama yok.</td></tr>
+      <tr><td colspan="5" class="dim">{{ _('web.index.empty') }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
@@ -48,7 +55,7 @@
   document.getElementById('capture-form').addEventListener('submit', function () {
     var b = this.querySelector('button');
     b.disabled = true;
-    b.textContent = 'Yakalanıyor…';
+    b.textContent = this.dataset.submitting;
   });
 </script>
 {% endblock %}

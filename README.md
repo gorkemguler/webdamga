@@ -23,6 +23,32 @@ say was tampered with.
 
 ---
 
+## Language
+
+The CLI and the web interface both speak **English and Turkish**. English is
+the default; Turkish is picked up automatically when your environment or
+browser asks for it.
+
+```bash
+webdamga --lang tr capture https://example.com   # this run, in Turkish
+WEBDAMGA_LANG=tr webdamga --help                 # help text too
+```
+
+| Surface | How the language is chosen (first match wins) |
+| --- | --- |
+| CLI | `--lang` → `WEBDAMGA_LANG` → system locale (`LC_ALL` / `LANG`) → English |
+| Web | `?lang=` → `webdamga_lang` cookie → `Accept-Language` → English |
+
+The web interface has an **EN / TR** switch in the top right; the choice is
+stored in a cookie, so it sticks. Help text in the CLI is built at startup, so
+switching it needs the environment variable rather than `--lang`.
+
+Adding another language means adding one dictionary to
+[`webdamga/i18n.py`](webdamga/i18n.py); a test asserts every language defines
+exactly the same keys, so nothing can be half translated.
+
+---
+
 ## What it produces
 
 Every capture writes the following into `data/captures/<id>/`:
