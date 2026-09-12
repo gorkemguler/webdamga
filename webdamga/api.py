@@ -30,6 +30,7 @@ from .jobs import CaptureQueue
 from .network import ProxyError, load_profiles
 from .report import default_package_name, export_package, render_report_pdf
 from .storage import JOB_ACTIVE, Store
+from .timestamp import inspect_timestamps, timestamp_capture
 
 DATA_DIR = default_data_dir().resolve()
 _BASE = Path(__file__).parent
@@ -155,6 +156,7 @@ def create_capture(
     height: int = Form(800),
     route: str = Form(""),
     record_egress: bool = Form(False),
+    timestamp: bool = Form(False),
 ) -> RedirectResponse:
     settings = CaptureSettings(
         wait_until=wait_until,
@@ -165,6 +167,7 @@ def create_capture(
         viewport_height=height,
         proxy_profile=_checked_route(route),
         record_egress=record_egress,
+        timestamp=timestamp,
     )
     job = queue.enqueue(url, settings, source="web")
     return RedirectResponse(url=f"/jobs/{job['id']}", status_code=303)
@@ -190,6 +193,7 @@ def capture_detail(request: Request, capture_id: str, lang: str = Depends(get_la
             "m": _load_meta(capture_id),
             "manifest": _load_manifest(capture_id),
             "capture_id": capture_id,
+            "timestamps": inspect_timestamps(_capture_dir(capture_id), run_openssl=False),
         },
     )
 
@@ -197,6 +201,21 @@ def capture_detail(request: Request, capture_id: str, lang: str = Depends(get_la
 @app.get("/captures/{capture_id}/verify")
 def capture_verify(capture_id: str) -> dict:
     return verify_capture(_capture_dir(capture_id))
+
+
+@app.post("/captures/{capture_id}/timestamp")
+def capture_timestamp(capture_id: str) -> dict:
+    """Mevcut bir yakalamaya zaman damgası ekler; var olanları ezmez."""
+    cap_dir = _capture_dir(capture_id)
+    if not (cap_dir / MANIFEST_NAME).is_file():
+        raise HTTPException(status_code=409, detail="capture has no manifest")
+    current = inspect_timestamps(cap_dir, run_openssl=False)
+    want_rfc = not current["rfc3161"]["present"]
+    want_ots = not current["opentimestamps"]["present"]
+    if not (want_rfc or want_ots):
+        raise HTTPException(status_code=409, detail="capture is already timestamped")
+    result = timestamp_capture(cap_dir, rfc3161=want_rfc, opentimestamps=want_ots)
+    return {"requested": result, "timestamps": inspect_timestamps(cap_dir, run_openssl=False)}
 
 
 @app.get("/captures/{capture_id}/report.pdf")
@@ -267,6 +286,7 @@ class CaptureRequest(BaseModel):
     height: int = Field(800, ge=320, le=4320)
     route: str | None = Field(None, description="proxy profile name, e.g. 'tor'")
     record_egress: bool = False
+    timestamp: bool = False
 
 
 @app.get("/api/captures")
@@ -290,6 +310,7 @@ def api_create_job(body: CaptureRequest) -> dict:
         viewport_height=body.height,
         proxy_profile=_checked_route(body.route),
         record_egress=body.record_egress,
+        timestamp=body.timestamp,
     )
     return _public_job(queue.enqueue(body.url, settings, source="api"))
 

@@ -36,6 +36,7 @@ from . import __version__
 from .config import CaptureSettings
 from .network import EGRESS_CHECK_URL, ProxyError, Route, ensure_reachable, parse_egress, resolve_route
 from .seal import prepare_signing, seal_capture
+from .timestamp import timestamp_capture
 from .warc import WARC_NAME, ResponseRecorder, write_warc
 
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://")
@@ -385,4 +386,10 @@ async def capture(url: str, data_dir: Path, settings: CaptureSettings | None = N
     meta["manifest_sha256"] = sealed["manifest_sha256"]
     if sealed["signature"]:
         meta["signature_file"] = sealed["signature"]
+
+    if settings.timestamp:
+        # Mühürden sonra: damgalanan şey imzalanmış son manifestodur. Sonuç
+        # metadata.json'a yazılamaz (o zaten mühürlü); dosyalar yanına konur
+        # ve doğrulama onları ayrıca kontrol eder.
+        meta["timestamps"] = await asyncio.to_thread(timestamp_capture, out_dir)
     return meta

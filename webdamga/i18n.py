@@ -121,6 +121,59 @@ _EN: dict[str, str] = {
     "web.detail.requests.one": "{count} request",
     "web.detail.requests.other": "{count} requests",
     "web.detail.metadata_json": "metadata (JSON)",
+    # --- Timestamps ---
+    "cli.capture.opt.timestamp": "Get trusted timestamps (RFC 3161 and OpenTimestamps); sends only the manifest hash",
+    "cli.ts.help": "Get trusted timestamps for an existing capture's manifest.",
+    "cli.ts.opt.rfc3161": "Ask an RFC 3161 time stamp authority",
+    "cli.ts.opt.ots": "Anchor in Bitcoin via OpenTimestamps calendars",
+    "cli.ts.opt.tsa": "RFC 3161 TSA URL (default: WEBDAMGA_TSA_URL or DigiCert)",
+    "cli.ts.opt.force": "Replace existing timestamps (an older timestamp is usually worth more)",
+    "cli.ts.exists": "This capture already has timestamps. Use --force to replace them.",
+    "cli.ts.requesting": "requesting timestamps (TSA: {tsa})…",
+    "cli.ts.rfc_ok": "RFC 3161: {time} from {tsa}",
+    "cli.ts.rfc_failed": "RFC 3161 failed:",
+    "cli.ts.ots_ok": "OpenTimestamps: submitted to {count} calendars, Bitcoin confirmation takes a few hours",
+    "cli.ts.ots_failed": "OpenTimestamps failed:",
+    "cli.ts.tsa_sig_ok": "TSA signature verified",
+    "cli.ts.tsa_sig_bad": "TSA SIGNATURE NOT VERIFIED",
+    "cli.ts.tsa_sig_unchecked": "TSA signature not checked, openssl unavailable",
+    "cli.ts.ots_pending": "pending Bitcoin confirmation",
+    "cli.ts.ots_confirmed": "confirmed in Bitcoin",
+    "web.index.timestamp": "trusted timestamp",
+    "web.detail.timestamp": "trusted time",
+    "web.detail.timestamp.none": "no trusted timestamp",
+    "web.detail.timestamp.ots_pending": "OpenTimestamps pending",
+    "web.detail.timestamp.ots_confirmed": "confirmed in Bitcoin",
+    "web.detail.timestamp_btn": "Timestamp now",
+    "web.detail.timestamping": "Requesting timestamps…",
+    "web.detail.timestamp_hint": "Sends only the manifest's SHA-256 to a time stamp authority and to OpenTimestamps calendars.",
+    "report.field.rfc3161": "RFC 3161 timestamp",
+    "report.field.ots": "OpenTimestamps",
+    "report.ots.pending": "submitted, pending Bitcoin confirmation",
+    "report.ots.confirmed": "confirmed in Bitcoin block {height}",
+    "report.verify.rfc3161": "Check the RFC 3161 timestamp against the system's trusted roots:",
+    "report.verify.ots": "Upgrade and check the OpenTimestamps proof (after a few hours):",
+    "pkg.readme.timestamps": """
+WHEN IT EXISTED
+---------------
+A third party vouched for the moment manifest.json existed, so the capture
+time does not rest on the capturing machine's clock alone.
+{rfc3161}{ots}""",
+    "pkg.readme.rfc3161": """
+manifest.json.tsr is an RFC 3161 timestamp ({time}). Check it with OpenSSL
+against your system's trusted root certificates:
+
+     openssl ts -verify -data manifest.json -in manifest.json.tsr -CAfile /etc/ssl/cert.pem
+""",
+    "pkg.readme.ots": """
+manifest.json.ots anchors the manifest's hash in the Bitcoin blockchain via
+OpenTimestamps. With the official client (pip install opentimestamps-client):
+
+     ots upgrade manifest.json.ots
+     ots verify manifest.json.ots -f manifest.json
+
+or drop both files on https://opentimestamps.org.
+""",
     # --- Signing ---
     "cli.capture.opt.sign": "Sign the manifest if a signing key exists (webdamga keygen)",
     "cli.field.signed_by": "signed by key",
@@ -331,7 +384,7 @@ HOW TO VERIFY IT
 3. If you have webdamga installed, both checks run together:
 
      webdamga verify {capture_id}
-{signature_section}
+{signature_section}{timestamp_section}
 {packaging_files} were created while packaging, so they are not listed in
 manifest.json. Every other file is.
 
@@ -444,6 +497,59 @@ _TR: dict[str, str] = {
     "web.detail.requests.one": "{count} istek",
     "web.detail.requests.other": "{count} istek",
     "web.detail.metadata_json": "metadata (JSON)",
+    # --- Zaman damgası ---
+    "cli.capture.opt.timestamp": "Güvenilir zaman damgası al (RFC 3161 ve OpenTimestamps); yalnızca manifest özeti gönderilir",
+    "cli.ts.help": "Mevcut bir yakalamanın manifestosu için güvenilir zaman damgası al.",
+    "cli.ts.opt.rfc3161": "Bir RFC 3161 zaman damgası otoritesine sor",
+    "cli.ts.opt.ots": "OpenTimestamps takvimleriyle Bitcoin'e bağla",
+    "cli.ts.opt.tsa": "RFC 3161 TSA adresi (varsayılan: WEBDAMGA_TSA_URL ya da DigiCert)",
+    "cli.ts.opt.force": "Mevcut zaman damgalarını değiştir (eski tarihli damga genelde daha değerlidir)",
+    "cli.ts.exists": "Bu yakalamanın zaten zaman damgası var. Değiştirmek için --force kullan.",
+    "cli.ts.requesting": "zaman damgaları isteniyor (TSA: {tsa})…",
+    "cli.ts.rfc_ok": "RFC 3161: {time}, {tsa}",
+    "cli.ts.rfc_failed": "RFC 3161 başarısız:",
+    "cli.ts.ots_ok": "OpenTimestamps: {count} takvime gönderildi, Bitcoin onayı birkaç saat sürer",
+    "cli.ts.ots_failed": "OpenTimestamps başarısız:",
+    "cli.ts.tsa_sig_ok": "TSA imzası doğrulandı",
+    "cli.ts.tsa_sig_bad": "TSA İMZASI DOĞRULANAMADI",
+    "cli.ts.tsa_sig_unchecked": "TSA imzası kontrol edilmedi, openssl yok",
+    "cli.ts.ots_pending": "Bitcoin onayı bekleniyor",
+    "cli.ts.ots_confirmed": "Bitcoin'de onaylandı",
+    "web.index.timestamp": "güvenilir zaman damgası",
+    "web.detail.timestamp": "güvenilir zaman",
+    "web.detail.timestamp.none": "güvenilir zaman damgası yok",
+    "web.detail.timestamp.ots_pending": "OpenTimestamps bekliyor",
+    "web.detail.timestamp.ots_confirmed": "Bitcoin'de onaylandı",
+    "web.detail.timestamp_btn": "Şimdi damgala",
+    "web.detail.timestamping": "Zaman damgaları isteniyor…",
+    "web.detail.timestamp_hint": "Yalnızca manifestonun SHA-256 özeti bir zaman damgası otoritesine ve OpenTimestamps takvimlerine gönderilir.",
+    "report.field.rfc3161": "RFC 3161 zaman damgası",
+    "report.field.ots": "OpenTimestamps",
+    "report.ots.pending": "gönderildi, Bitcoin onayı bekleniyor",
+    "report.ots.confirmed": "{height} numaralı Bitcoin bloğunda onaylandı",
+    "report.verify.rfc3161": "RFC 3161 zaman damgasını sistemin güvenilir kök sertifikalarıyla doğrulayın:",
+    "report.verify.ots": "OpenTimestamps kanıtını yükseltip doğrulayın (birkaç saat sonra):",
+    "pkg.readme.timestamps": """
+NE ZAMAN VARDI
+--------------
+manifest.json'un hangi anda var olduğuna üçüncü bir taraf kefil oldu; yani
+yakalama zamanı yalnızca yakalayan makinenin saatine dayanmıyor.
+{rfc3161}{ots}""",
+    "pkg.readme.rfc3161": """
+manifest.json.tsr bir RFC 3161 zaman damgasıdır ({time}). OpenSSL ile
+sisteminizin güvenilir kök sertifikalarına karşı doğrulayın:
+
+     openssl ts -verify -data manifest.json -in manifest.json.tsr -CAfile /etc/ssl/cert.pem
+""",
+    "pkg.readme.ots": """
+manifest.json.ots, manifestonun özetini OpenTimestamps aracılığıyla Bitcoin
+blok zincirine bağlar. Resmi istemciyle (pip install opentimestamps-client):
+
+     ots upgrade manifest.json.ots
+     ots verify manifest.json.ots -f manifest.json
+
+ya da iki dosyayı https://opentimestamps.org sayfasına bırakın.
+""",
     # --- İmzalama ---
     "cli.capture.opt.sign": "İmza anahtarı varsa manifestoyu imzala (webdamga keygen)",
     "cli.field.signed_by": "imzalayan anahtar",
@@ -653,7 +759,7 @@ NASIL DOĞRULANIR
 3. webdamga kuruluysa iki kontrol tek komutta çalışır:
 
      webdamga verify {capture_id}
-{signature_section}
+{signature_section}{timestamp_section}
 {packaging_files} paketleme sırasında oluşturulduğu için manifest.json'da
 listelenmez. Diğer tüm dosyalar listelidir.
 

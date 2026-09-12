@@ -40,6 +40,7 @@ class CaptureSettings:
     record_egress: bool = False  # çıkış IP'sini check.torproject.org ile kaydet
     warc: bool = True  # yeniden oynatılabilir archive.warc.gz üret
     sign: bool = True  # anahtar varsa manifestoyu imzala (webdamga keygen)
+    timestamp: bool = False  # RFC 3161 + OpenTimestamps; manifest özetini üçüncü taraflara gönderir
 
     def as_dict(self) -> dict:
         """metadata.json'a yazılan, okunur biçim. Proxy kimlik bilgisi içermez."""
@@ -61,6 +62,7 @@ class CaptureSettings:
             "record_egress": self.record_egress,
             "warc": self.warc,
             "sign": self.sign,
+            "timestamp": self.timestamp,
         }
 
     def to_storage(self) -> dict:

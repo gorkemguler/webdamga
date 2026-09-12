@@ -123,12 +123,22 @@ def verify_capture(capture_dir: Path, public_key=None) -> dict:
     if signature["present"] and signature["ok"] is False:
         ok = False
 
+    from .timestamp import inspect_timestamps
+
+    timestamps = inspect_timestamps(capture_dir)
+    for entry in timestamps.values():
+        # Token başka veriye aitse ya da bozuksa klasör güvenilmez; TSA
+        # imzasının openssl ile doğrulanamaması (ör. CA dosyası yok) değil.
+        if entry.get("present") and entry.get("ok") is False:
+            ok = False
+
     return {
         "ok": ok,
         "capture_id": capture_dir.name,
         "manifest_sha256": manifest_digest,
         "sidecar_ok": sidecar_ok,
         "signature": signature,
+        "timestamps": timestamps,
         "files": results,
     }
 

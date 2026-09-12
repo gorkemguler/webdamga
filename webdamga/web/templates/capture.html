@@ -25,6 +25,15 @@
       <dt>{{ _('web.detail.egress') }}</dt>
       <dd>{{ net.egress.ip }} <span class="dim">&middot; {{ _('web.detail.egress.tor') if net.egress.is_tor else _('web.detail.egress.not_tor') }}</span></dd>
       {% endif %}
+      {% set rfc = timestamps.rfc3161 %}{% set ots = timestamps.opentimestamps %}
+      <dt>{{ _('web.detail.timestamp') }}</dt>
+      <dd id="ts-summary">
+        {% if rfc.present and rfc.ok %}{{ rfc.gen_time }} <span class="dim">(RFC 3161)</span>{% endif %}
+        {% if ots.present and ots.ok %}{% if rfc.present and rfc.ok %}<br>{% endif %}<span class="dim">{{ _('web.detail.timestamp.ots_confirmed') if ots.state == 'confirmed' else _('web.detail.timestamp.ots_pending') }}</span>{% endif %}
+        {% if not (rfc.present or ots.present) %}<span class="dim">{{ _('web.detail.timestamp.none') }}</span>
+          <button type="button" class="ghost small" id="ts-btn" data-id="{{ capture_id }}"
+                  data-busy="{{ _('web.detail.timestamping') }}" title="{{ _('web.detail.timestamp_hint') }}">{{ _('web.detail.timestamp_btn') }}</button>{% endif %}
+      </dd>
       <dt>{{ _('web.detail.signed_by') }}</dt>
       <dd>{% if m.signing and m.signing.key_id %}<code>{{ m.signing.key_id }}</code>{% else %}<span class="dim">{{ _('web.detail.unsigned') }}</span>{% endif %}</dd>
       {% if m.browser %}<dt>{{ _('web.detail.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>{% endif %}
@@ -106,6 +115,23 @@
 </section>
 
 <script>
+  (function () {
+    var btn = document.getElementById('ts-btn');
+    if (!btn) { return; }
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = btn.dataset.busy;
+      fetch('/captures/' + btn.dataset.id + '/timestamp', { method: 'POST' })
+        .then(function (r) { return r.json().then(function (body) { return { ok: r.ok, body: body }; }); })
+        .then(function (res) {
+          if (res.ok) { window.location.reload(); return; }
+          btn.disabled = false;
+          btn.textContent = (res.body && res.body.detail) || 'error';
+        })
+        .catch(function (err) { btn.disabled = false; btn.textContent = String(err); });
+    });
+  })();
+
   document.getElementById('verify-btn').addEventListener('click', async function (e) {
     var id = e.target.dataset.id;
     var out = document.getElementById('verify-out');

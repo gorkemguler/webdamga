@@ -33,6 +33,7 @@ from .signing import (
     sign_file,
 )
 from .storage import JOB_ACTIVE, Store
+from .timestamp import timestamp_capture, tsa_url
 from .warc import WARC_NAME, exchanges_from_har, write_warc
 
 # Yardım metinleri decorator zamanında kurulduğu için ortamdan gelen dile bağlı.
@@ -54,6 +55,7 @@ console = Console()
 _DataDir = typer.Option(None, "--data-dir", "-d", help=_h("cli.opt.data_dir"))
 _ExportOutput = typer.Option(None, "--output", "-o", help=_h("cli.export.opt.output"))
 _PubKey = typer.Option(None, "--pubkey", "-P", help=_h("cli.verify.opt.pubkey"))
+_TsaUrl = typer.Option(None, "--tsa", help=_h("cli.ts.opt.tsa"))
 _WarcOutput = typer.Option(None, "--output", "-o", help=_h("cli.warc.opt.output"))
 
 
@@ -93,6 +95,7 @@ def capture(
     record_egress: bool = typer.Option(False, "--record-egress", help=_h("cli.capture.opt.record_egress")),
     warc: bool = typer.Option(True, "--warc/--no-warc", help=_h("cli.capture.opt.warc")),
     sign: bool = typer.Option(True, "--sign/--no-sign", help=_h("cli.capture.opt.sign")),
+    timestamp: bool = typer.Option(False, "--timestamp", help=_h("cli.capture.opt.timestamp")),
 ) -> None:
     """Capture a URL and seal the evidence folder."""
     lang = _lang()
@@ -114,6 +117,7 @@ def capture(
         record_egress=record_egress,
         warc=warc,
         sign=sign,
+        timestamp=timestamp,
     )
     if user_agent:
         settings.user_agent = user_agent
@@ -173,8 +177,25 @@ def capture(
     elif signing.get("error"):
         table.add_row(t("cli.field.signed_by", lang), f"[red]{signing['error']}[/]")
     console.print(table)
+    if meta.get("timestamps"):
+        _print_timestamp_result(meta["timestamps"], lang)
     if meta.get("error"):
         console.print(f"[yellow]{t('cli.warning', lang)}[/] {meta['error']}")
+
+
+def _print_timestamp_result(result: dict, lang: str) -> None:
+    rfc = result.get("rfc3161")
+    if rfc:
+        if rfc.get("ok"):
+            console.print(f"[green]{t('cli.ts.rfc_ok', lang, time=rfc['gen_time'], tsa=rfc['tsa'])}[/]")
+        else:
+            console.print(f"[yellow]{t('cli.ts.rfc_failed', lang)}[/] {rfc.get('error')}")
+    ots = result.get("opentimestamps")
+    if ots:
+        if ots.get("ok"):
+            console.print(f"[green]{t('cli.ts.ots_ok', lang, count=ots['calendars'])}[/]")
+        else:
+            console.print(f"[yellow]{t('cli.ts.ots_failed', lang)}[/] {ots.get('error')}")
 
 
 @app.command("list", help=_h("cli.list.help"))
@@ -241,6 +262,28 @@ def verify(
         else:
             status = f"[yellow]{t('cli.verify.sig_unchecked', lang)}[/]"
         table.add_row(SIGNATURE_NAME, status)
+    timestamps = result.get("timestamps") or {}
+    rfc = timestamps.get("rfc3161") or {}
+    if rfc.get("present"):
+        if rfc.get("ok"):
+            tsa_sig = (rfc.get("tsa_signature") or {}).get("verified")
+            note = {True: t("cli.ts.tsa_sig_ok", lang), False: t("cli.ts.tsa_sig_bad", lang)}.get(
+                tsa_sig, t("cli.ts.tsa_sig_unchecked", lang)
+            )
+            table.add_row("manifest.json.tsr", f"[green]{rfc['gen_time']}[/] ({note})")
+        else:
+            table.add_row("manifest.json.tsr", f"[red]{rfc.get('error')}[/]")
+    ots = timestamps.get("opentimestamps") or {}
+    if ots.get("present"):
+        if ots.get("ok"):
+            label = (
+                t("cli.ts.ots_confirmed", lang)
+                if ots.get("state") == "confirmed"
+                else t("cli.ts.ots_pending", lang)
+            )
+            table.add_row("manifest.json.ots", f"[green]{label}[/]")
+        else:
+            table.add_row("manifest.json.ots", f"[red]{ots.get('error')}[/]")
     console.print(table)
     if signature.get("trusted_comment"):
         console.print(f"[dim]{t('cli.verify.sig_comment', lang)}: {signature['trusted_comment']}[/]")
@@ -377,6 +420,35 @@ def sign(
     # Mühürlenmiş manifestoya dokunulmaz; imza yanına ayrı dosya olarak yazılır.
     sig = sign_file(manifest, secret, trusted_comment(capture_id))
     console.print(f"[green]{t('cli.sign.done', lang)}[/] {sig} ({secret.id})")
+
+
+@app.command("timestamp", help=_h("cli.ts.help"))
+def timestamp_command(
+    capture_id: str = typer.Argument(..., help=_h("cli.export.arg.id")),
+    data_dir: Path | None = _DataDir,
+    rfc3161: bool = typer.Option(True, "--rfc3161/--no-rfc3161", help=_h("cli.ts.opt.rfc3161")),
+    ots: bool = typer.Option(True, "--ots/--no-ots", help=_h("cli.ts.opt.ots")),
+    tsa: str | None = _TsaUrl,
+    force: bool = typer.Option(False, "--force", help=_h("cli.ts.opt.force")),
+) -> None:
+    """Get trusted timestamps for an existing capture's manifest."""
+    lang = _lang()
+    cap_dir = _resolve_data_dir(data_dir) / "captures" / capture_id
+    if not (cap_dir / "manifest.json").is_file():
+        console.print(f"[red]{t('cli.verify.not_found', lang)}[/] {cap_dir}")
+        raise typer.Exit(1)
+    if not force:
+        # Var olan damgaları ezme: eski tarihli bir damga yenisinden daha değerli.
+        rfc3161 = rfc3161 and not (cap_dir / "manifest.json.tsr").exists()
+        ots = ots and not (cap_dir / "manifest.json.ots").exists()
+        if not (rfc3161 or ots):
+            console.print(f"[yellow]{t('cli.ts.exists', lang)}[/]")
+            raise typer.Exit(1)
+    console.print(f"[dim]{t('cli.ts.requesting', lang, tsa=tsa or tsa_url())}[/]")
+    result = timestamp_capture(cap_dir, rfc3161=rfc3161, opentimestamps=ots, tsa=tsa)
+    _print_timestamp_result(result, lang)
+    if not any(entry.get("ok") for entry in result.values()):
+        raise typer.Exit(1)
 
 
 @app.command("warc", help=_h("cli.warc.help"))

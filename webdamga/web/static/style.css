@@ -153,6 +153,7 @@ dd { margin: 0; word-break: break-word; }
 
 button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
 button.ghost:hover { color: var(--fg); border-color: var(--dim); }
+button.small { padding: 2px 8px; font-size: 11px; margin-left: 6px; }
 
 .job-url code { word-break: break-all; }
 .job-state { display: flex; align-items: center; gap: 10px; font-size: 15px; }

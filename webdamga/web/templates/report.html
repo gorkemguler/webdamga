@@ -96,6 +96,8 @@
 </style>
 </head>
 <body>
+{% set rfc = (timestamps or {}).get('rfc3161') or {} %}
+{% set ots = (timestamps or {}).get('opentimestamps') or {} %}
 
 <header>
   <h1>{{ _('report.title') }}</h1>
@@ -171,6 +173,14 @@
 <div class="anchor">
   <div class="label">{{ _('report.field.manifest_sha') }}</div>
   <div class="value">{{ manifest_sha256 }}</div>
+  {% if rfc.ok %}
+  <div class="label" style="margin-top:6pt">{{ _('report.field.rfc3161') }}</div>
+  <div class="value">{{ rfc.gen_time }}</div>
+  {% endif %}
+  {% if ots.ok %}
+  <div class="label" style="margin-top:6pt">{{ _('report.field.ots') }}</div>
+  <div class="value">{% if ots.state == 'confirmed' %}{{ _('report.ots.confirmed', height=(ots.attestations | selectattr('type', 'equalto', 'bitcoin') | map(attribute='block_height') | first)) }}{% else %}{{ _('report.ots.pending') }}{% endif %}</div>
+  {% endif %}
   {% if signature %}
   <div class="label" style="margin-top:6pt">{{ _('report.field.signature') }}</div>
   <div class="value">{{ _('report.signature.value', key_id=signature.key_id) }}</div>
@@ -205,6 +215,14 @@
   {% if signature %}
   <li>{{ _('report.verify.signature') }}
     <pre>minisign -Vm manifest.json -p signer.pub</pre></li>
+  {% endif %}
+  {% if rfc.ok %}
+  <li>{{ _('report.verify.rfc3161') }}
+    <pre>openssl ts -verify -data manifest.json -in manifest.json.tsr -CAfile /etc/ssl/cert.pem</pre></li>
+  {% endif %}
+  {% if ots.ok %}
+  <li>{{ _('report.verify.ots') }}
+    <pre>ots upgrade manifest.json.ots &amp;&amp; ots verify manifest.json.ots -f manifest.json</pre></li>
   {% endif %}
   <li>{{ _('report.verify.step3') }}
     <pre>webdamga verify {{ m.capture_id }}</pre></li>

@@ -18,6 +18,7 @@ from . import __version__
 from .hashing import MANIFEST_NAME, MANIFEST_SIDECAR, SIGNATURE_NAME, sha256_bytes, sha256_file
 from .i18n import DEFAULT_LANG, t, translator
 from .signing import SigningError, parse_signature
+from .timestamp import inspect_timestamps
 
 REPORT_NAME = "evidence-report.pdf"
 PACKAGE_README = "README.txt"
@@ -91,6 +92,7 @@ def build_report_html(capture_dir: Path, meta: dict, manifest: dict, lang: str =
         generated_utc=_now_iso(),
         manifest_sha256=_manifest_sha256(capture_dir),
         signature=signature_info(capture_dir, meta),
+        timestamps=inspect_timestamps(capture_dir, run_openssl=False),
     )
 
 
@@ -112,8 +114,25 @@ async def render_report_pdf(capture_dir: Path, meta: dict, manifest: dict, lang:
     return pdf
 
 
+def _timestamp_section(timestamps: dict | None, lang: str) -> str:
+    if not timestamps:
+        return ""
+    rfc = timestamps.get("rfc3161") or {}
+    ots = timestamps.get("opentimestamps") or {}
+    rfc_text = t("pkg.readme.rfc3161", lang, time=rfc["gen_time"]) if rfc.get("ok") else ""
+    ots_text = t("pkg.readme.ots", lang) if ots.get("ok") else ""
+    if not (rfc_text or ots_text):
+        return ""
+    return t("pkg.readme.timestamps", lang, rfc3161=rfc_text, ots=ots_text)
+
+
 def build_readme(
-    meta: dict, lang: str = DEFAULT_LANG, *, signature: dict | None = None, pdf: bool = True
+    meta: dict,
+    lang: str = DEFAULT_LANG,
+    *,
+    signature: dict | None = None,
+    pdf: bool = True,
+    timestamps: dict | None = None,
 ) -> str:
     packaging = [PACKAGE_README] + ([REPORT_NAME] if pdf else [])
     section = ""
@@ -132,6 +151,7 @@ def build_readme(
         packaged=_now_iso(),
         version=__version__,
         signature_section=section,
+        timestamp_section=_timestamp_section(timestamps, lang),
         packaging_files=files,
     )
 
@@ -156,7 +176,8 @@ def build_package(
 
     signature = signature_info(capture_dir, meta)
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        readme = build_readme(meta, lang, signature=signature, pdf=bool(pdf_bytes))
+        timestamps = inspect_timestamps(capture_dir, run_openssl=False)
+        readme = build_readme(meta, lang, signature=signature, pdf=bool(pdf_bytes), timestamps=timestamps)
         _write(zf, PACKAGE_README, readme.encode("utf-8"))
         if pdf_bytes:
             _write(zf, REPORT_NAME, pdf_bytes)
