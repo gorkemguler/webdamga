@@ -18,7 +18,14 @@
       <label>{{ _('web.index.extra_wait') }}<input type="number" step="0.5" name="wait" value="1.5" min="0" max="30"></label>
       <label>{{ _('web.index.width') }}<input type="number" name="width" value="1280" min="320" max="3840"></label>
       <label>{{ _('web.index.height') }}<input type="number" name="height" value="800" min="320" max="4320"></label>
+      <label>{{ _('web.index.route') }}
+        <select name="route">
+          <option value="" selected>{{ _('web.index.route.direct') }}</option>
+          {% for r in routes %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+      </label>
       <label class="chk"><input type="checkbox" name="full_page" value="true" checked> {{ _('web.index.full_page') }}</label>
+      <label class="chk"><input type="checkbox" name="record_egress" value="true"> {{ _('web.index.record_egress') }}</label>
     </div>
     <button type="submit">{{ _('web.index.submit') }}</button>
     <p class="hint">{{ _('web.index.hint') }}</p>

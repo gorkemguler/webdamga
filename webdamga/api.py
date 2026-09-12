@@ -27,6 +27,7 @@ from .i18n import (
     translator,
 )
 from .jobs import CaptureQueue
+from .network import ProxyError, load_profiles
 from .report import default_package_name, export_package, render_report_pdf
 from .storage import JOB_ACTIVE, Store
 
@@ -104,6 +105,21 @@ def _load_manifest(capture_id: str) -> dict:
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
+def _route_names() -> list[str]:
+    """Web'den seçilebilecek profil adları. Ham proxy adresi web'den kabul edilmez."""
+    try:
+        return sorted(load_profiles(DATA_DIR))
+    except ProxyError:
+        return []
+
+
+def _checked_route(route: str | None) -> str | None:
+    route = (route or "").strip() or None
+    if route is not None and route not in _route_names():
+        raise HTTPException(status_code=422, detail=f"unknown network route '{route}'")
+    return route
+
+
 def _public_job(job: dict) -> dict:
     """settings_json'ı açılmış hâlde döner."""
     out = {k: v for k, v in job.items() if k != "settings_json"}
@@ -123,6 +139,7 @@ def index(request: Request, lang: str = Depends(get_lang)) -> HTMLResponse:
         {
             "captures": _store.list(200),
             "active_jobs": list(reversed(_store.list_jobs(statuses=JOB_ACTIVE, limit=50))),
+            "routes": _route_names(),
         },
     )
 
@@ -136,6 +153,8 @@ def create_capture(
     wait: float = Form(1.5),
     width: int = Form(1280),
     height: int = Form(800),
+    route: str = Form(""),
+    record_egress: bool = Form(False),
 ) -> RedirectResponse:
     settings = CaptureSettings(
         wait_until=wait_until,
@@ -144,6 +163,8 @@ def create_capture(
         full_page=full_page,
         viewport_width=width,
         viewport_height=height,
+        proxy_profile=_checked_route(route),
+        record_egress=record_egress,
     )
     job = queue.enqueue(url, settings, source="web")
     return RedirectResponse(url=f"/jobs/{job['id']}", status_code=303)
@@ -244,6 +265,8 @@ class CaptureRequest(BaseModel):
     wait: float = Field(1.5, ge=0, le=30)
     width: int = Field(1280, ge=320, le=3840)
     height: int = Field(800, ge=320, le=4320)
+    route: str | None = Field(None, description="proxy profile name, e.g. 'tor'")
+    record_egress: bool = False
 
 
 @app.get("/api/captures")
@@ -265,8 +288,15 @@ def api_create_job(body: CaptureRequest) -> dict:
         full_page=body.full_page,
         viewport_width=body.width,
         viewport_height=body.height,
+        proxy_profile=_checked_route(body.route),
+        record_egress=body.record_egress,
     )
     return _public_job(queue.enqueue(body.url, settings, source="api"))
+
+
+@app.get("/api/routes")
+def api_routes() -> list[str]:
+    return _route_names()
 
 
 @app.get("/api/jobs")

@@ -21,6 +21,7 @@ from .capture import normalize_url
 from .config import CaptureSettings, default_data_dir
 from .hashing import verify_capture
 from .i18n import SUPPORTED_LANGS, detect_lang, normalize_lang, t, tn
+from .network import TOR_PROFILE, ProxyError, load_profiles, redact_proxy
 from .report import default_package_name, export_package
 from .storage import JOB_ACTIVE, Store
 
@@ -74,10 +75,17 @@ def capture(
     height: int = typer.Option(800, "--height", help=_h("cli.capture.opt.height")),
     user_agent: str | None = typer.Option(None, "--user-agent", "-A", help=_h("cli.capture.opt.user_agent")),
     headful: bool = typer.Option(False, "--headful", help=_h("cli.capture.opt.headful")),
+    proxy: str | None = typer.Option(None, "--proxy", help=_h("cli.capture.opt.proxy")),
+    tor: bool = typer.Option(False, "--tor", help=_h("cli.capture.opt.tor")),
+    via: str | None = typer.Option(None, "--via", help=_h("cli.capture.opt.via")),
+    record_egress: bool = typer.Option(False, "--record-egress", help=_h("cli.capture.opt.record_egress")),
 ) -> None:
     """Capture a URL and seal the evidence folder."""
     lang = _lang()
     ddir = _resolve_data_dir(data_dir)
+    if sum(bool(x) for x in (proxy, tor, via)) > 1:
+        console.print(f"[red]{t('cli.capture.route_conflict', lang)}[/]")
+        raise typer.Exit(2)
     settings = CaptureSettings(
         wait_until=wait_until,
         timeout_ms=int(timeout * 1000),
@@ -87,6 +95,9 @@ def capture(
         viewport_height=height,
         headless=not headful,
         pdf=not headful,
+        proxy=proxy,
+        proxy_profile=TOR_PROFILE if tor else via,
+        record_egress=record_egress,
     )
     if user_agent:
         settings.user_agent = user_agent
@@ -128,6 +139,16 @@ def capture(
                 kb=f"{rs.get('transfer_bytes', 0) / 1024:.1f}",
             ),
         )
+    network = meta.get("network") or {}
+    if network.get("mode") not in (None, "direct"):
+        route = network.get("proxy") or "-"
+        if network.get("profile"):
+            route = f"{network['profile']} ({route})"
+        table.add_row(t("cli.field.route", lang), route)
+    egress = network.get("egress") or {}
+    if egress.get("ip"):
+        tor_note = f" · {t('cli.field.via_tor', lang)}" if egress.get("is_tor") else ""
+        table.add_row(t("cli.field.egress", lang), f"{egress['ip']}{tor_note}")
     table.add_row(t("cli.field.folder", lang), meta["dir"])
     table.add_row(t("cli.field.manifest", lang), meta.get("manifest_sha256", "-"))
     console.print(table)
@@ -258,6 +279,25 @@ def jobs(
             row["capture_id"] or "-",
         )
     console.print(table)
+
+
+@app.command(help=_h("cli.proxies.help"))
+def proxies(data_dir: Path | None = _DataDir) -> None:
+    """List proxy profiles."""
+    lang = _lang()
+    ddir = _resolve_data_dir(data_dir)
+    try:
+        profiles = load_profiles(ddir)
+    except ProxyError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1) from exc
+    table = Table()
+    table.add_column(t("cli.col.profile", lang), style="cyan", no_wrap=True)
+    table.add_column(t("cli.col.proxy", lang), overflow="fold")
+    for name, address in sorted(profiles.items()):
+        table.add_row(name, redact_proxy(address) or "-")
+    console.print(table)
+    console.print(f"[dim]{t('cli.proxies.file', lang, path=ddir / 'proxies.json')}[/]")
 
 
 @app.command(help=_h("cli.serve.help"))

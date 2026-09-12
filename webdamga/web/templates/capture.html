@@ -18,7 +18,14 @@
       {% if m.remote_address %}<dt>{{ _('web.detail.server_ip') }}</dt><dd>{{ m.remote_address.ipAddress }}:{{ m.remote_address.port }}</dd>{% endif %}
       {% if m.tls %}<dt>{{ _('web.detail.tls') }}</dt><dd>{{ m.tls.protocol }}<br><span class="dim">{{ m.tls.issuer }} &rarr; {{ m.tls.subjectName }}</span><br><span class="dim">{{ m.tls.validFrom_iso or m.tls.validFrom }} &ndash; {{ m.tls.validTo_iso or m.tls.validTo }}</span></dd>{% endif %}
       {% if m.resource_summary %}<dt>{{ _('web.detail.resources') }}</dt><dd>{{ _('web.detail.requests', count=m.resource_summary.request_count or 0) }} &middot; {{ (m.resource_summary.transfer_bytes / 1024) | round(1) }} KB</dd>{% endif %}
-      <dt>{{ _('web.detail.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>
+      {% set net = m.network or {} %}
+      <dt>{{ _('web.detail.route') }}</dt>
+      <dd>{% if net.mode in (None, 'direct') %}{{ _('web.detail.route.direct') }}{% else %}{{ net.profile or net.mode }}{% if net.proxy %} <span class="dim">({{ net.proxy }})</span>{% endif %}{% endif %}</dd>
+      {% if net.egress and net.egress.ip %}
+      <dt>{{ _('web.detail.egress') }}</dt>
+      <dd>{{ net.egress.ip }} <span class="dim">&middot; {{ _('web.detail.egress.tor') if net.egress.is_tor else _('web.detail.egress.not_tor') }}</span></dd>
+      {% endif %}
+      {% if m.browser %}<dt>{{ _('web.detail.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>{% endif %}
       <dt>{{ _('web.detail.user_agent') }}</dt><dd class="dim">{{ m.user_agent }}</dd>
       <dt>{{ _('web.detail.captured_by') }}</dt><dd class="dim">{{ m.capture_host.hostname }} &middot; {{ m.capture_host.platform }}</dd>
     </dl>

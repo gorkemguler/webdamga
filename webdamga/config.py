@@ -35,9 +35,14 @@ class CaptureSettings:
     headless: bool = True
     pdf: bool = True
     har_content: str = "embed"  # embed | attach | omit
+    proxy: str | None = None  # ör. socks5://127.0.0.1:9050, http://user:pass@host:3128
+    proxy_profile: str | None = None  # <data>/proxies.json içindeki ad ya da "tor"
+    record_egress: bool = False  # çıkış IP'sini check.torproject.org ile kaydet
 
     def as_dict(self) -> dict:
-        """metadata.json'a yazılan, okunur biçim."""
+        """metadata.json'a yazılan, okunur biçim. Proxy kimlik bilgisi içermez."""
+        from .network import redact_proxy
+
         return {
             "wait_until": self.wait_until,
             "timeout_ms": self.timeout_ms,
@@ -49,6 +54,9 @@ class CaptureSettings:
             "headless": self.headless,
             "pdf": self.pdf,
             "har_content": self.har_content,
+            "proxy": redact_proxy(self.proxy),
+            "proxy_profile": self.proxy_profile,
+            "record_egress": self.record_egress,
         }
 
     def to_storage(self) -> dict:

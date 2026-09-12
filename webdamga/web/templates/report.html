@@ -120,6 +120,13 @@
 
 <h2>{{ _('report.section.network') }}</h2>
 <dl>
+  {% set net = m.network or {} %}
+  <dt>{{ _('report.field.route') }}</dt>
+  <dd>{% if net.mode in (None, 'direct') %}{{ _('report.route.direct') }}{% else %}{{ net.profile or net.mode }}{% if net.proxy %} <span class="mono">({{ net.proxy }})</span>{% endif %}{% endif %}</dd>
+  {% if net.egress and net.egress.ip %}
+  <dt>{{ _('report.field.egress') }}</dt>
+  <dd class="mono">{{ net.egress.ip }} &middot; {{ _('web.detail.egress.tor') if net.egress.is_tor else _('web.detail.egress.not_tor') }}</dd>
+  {% endif %}
   {% if m.remote_address %}
   <dt>{{ _('report.field.server_ip') }}</dt>
   <dd class="mono">{{ m.remote_address.ipAddress }}:{{ m.remote_address.port }}</dd>
@@ -135,7 +142,7 @@
   <dd>{{ _('web.detail.requests', count=m.resource_summary.request_count or 0) }},
       {{ (m.resource_summary.transfer_bytes / 1024) | round(1) }} KB</dd>
   {% endif %}
-  <dt>{{ _('report.field.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>
+  {% if m.browser %}<dt>{{ _('report.field.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>{% endif %}
   <dt>{{ _('report.field.user_agent') }}</dt><dd class="mono">{{ m.user_agent }}</dd>
   <dt>{{ _('report.field.captured_by') }}</dt>
   <dd class="mono">{{ m.capture_host.hostname }} &middot; {{ m.capture_host.platform }}</dd>
