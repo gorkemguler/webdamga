@@ -24,6 +24,7 @@ from .i18n import SUPPORTED_LANGS, detect_lang, normalize_lang, t, tn
 from .network import TOR_PROFILE, ProxyError, load_profiles, redact_proxy
 from .report import default_package_name, export_package
 from .storage import JOB_ACTIVE, Store
+from .warc import WARC_NAME, exchanges_from_har, write_warc
 
 # Yardım metinleri decorator zamanında kurulduğu için ortamdan gelen dile bağlı.
 _HELP_LANG = detect_lang()
@@ -43,6 +44,7 @@ console = Console()
 
 _DataDir = typer.Option(None, "--data-dir", "-d", help=_h("cli.opt.data_dir"))
 _ExportOutput = typer.Option(None, "--output", "-o", help=_h("cli.export.opt.output"))
+_WarcOutput = typer.Option(None, "--output", "-o", help=_h("cli.warc.opt.output"))
 
 
 def _resolve_data_dir(value: Path | None) -> Path:
@@ -79,6 +81,7 @@ def capture(
     tor: bool = typer.Option(False, "--tor", help=_h("cli.capture.opt.tor")),
     via: str | None = typer.Option(None, "--via", help=_h("cli.capture.opt.via")),
     record_egress: bool = typer.Option(False, "--record-egress", help=_h("cli.capture.opt.record_egress")),
+    warc: bool = typer.Option(True, "--warc/--no-warc", help=_h("cli.capture.opt.warc")),
 ) -> None:
     """Capture a URL and seal the evidence folder."""
     lang = _lang()
@@ -98,6 +101,7 @@ def capture(
         proxy=proxy,
         proxy_profile=TOR_PROFILE if tor else via,
         record_egress=record_egress,
+        warc=warc,
     )
     if user_agent:
         settings.user_agent = user_agent
@@ -279,6 +283,44 @@ def jobs(
             row["capture_id"] or "-",
         )
     console.print(table)
+
+
+@app.command("warc", help=_h("cli.warc.help"))
+def warc_command(
+    capture_id: str = typer.Argument(..., help=_h("cli.export.arg.id")),
+    data_dir: Path | None = _DataDir,
+    output: Path | None = _WarcOutput,
+) -> None:
+    """Build a WARC file for a capture that does not have one."""
+    lang = _lang()
+    cap_dir = _resolve_data_dir(data_dir) / "captures" / capture_id
+    if not cap_dir.is_dir():
+        console.print(f"[red]{t('cli.verify.not_found', lang)}[/] {cap_dir}")
+        raise typer.Exit(1)
+    existing = cap_dir / WARC_NAME
+    if existing.is_file() and output is None:
+        console.print(t("cli.warc.exists", lang, path=existing))
+        raise typer.Exit()
+    har = cap_dir / "network.har"
+    if not har.is_file():
+        console.print(f"[red]{t('cli.warc.no_har', lang)}[/]")
+        raise typer.Exit(1)
+
+    meta = json.loads((cap_dir / "metadata.json").read_text(encoding="utf-8"))
+    exchanges = exchanges_from_har(har)
+    # Mühürlü klasöre yazmıyoruz: yeni bir dosya manifestoyu bozardı.
+    target = Path(output) if output else Path.cwd() / f"webdamga-{capture_id}.warc.gz"
+    summary = write_warc(target, exchanges, meta=meta, capture_dir=cap_dir)
+    lossy = sum(1 for ex in exchanges if ex.body_source == "har-text")
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="dim")
+    table.add_column(overflow="fold")
+    table.add_row(t("cli.warc.written", lang), str(target))
+    table.add_row(t("cli.warc.records", lang), str(summary["records"]))
+    console.print(table)
+    if lossy:
+        console.print(f"[yellow]{t('cli.warning', lang)}[/] {t('cli.warc.lossy', lang, count=lossy)}")
 
 
 @app.command(help=_h("cli.proxies.help"))

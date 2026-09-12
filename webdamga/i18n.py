@@ -121,6 +121,18 @@ _EN: dict[str, str] = {
     "web.detail.requests.one": "{count} request",
     "web.detail.requests.other": "{count} requests",
     "web.detail.metadata_json": "metadata (JSON)",
+    # --- WARC ---
+    "cli.capture.opt.warc": "Also write a replayable archive.warc.gz",
+    "cli.warc.help": "Build a WARC file from the HAR of an older capture that does not have one.",
+    "cli.warc.opt.output": "Output path (default: ./webdamga-<id>.warc.gz)",
+    "cli.warc.exists": "This capture already has a WARC sealed in its manifest: {path}",
+    "cli.warc.no_har": "This capture has no network.har to build from.",
+    "cli.warc.records": "records",
+    "cli.warc.written": "file",
+    "cli.warc.lossy": "{count} text responses came from the HAR, where the browser had already "
+    "decoded them to UTF-8. Their bytes may differ from what the server sent; those records are "
+    "marked WebDamga-Body-Source: har-text. New captures do not have this problem.",
+    "web.detail.warc_hint": "archive.warc.gz replays in ReplayWeb.page (replayweb.page) or pywb.",
     # --- Network route ---
     "cli.capture.opt.proxy": "Capture through a proxy, e.g. socks5://127.0.0.1:9050 or http://user:pass@host:3128",
     "cli.capture.opt.tor": "Capture through Tor (socks5://127.0.0.1:9050)",
@@ -252,6 +264,7 @@ automatically with a real Chromium browser.
   page.mhtml              self contained archive, opens in Chrome
   page.pdf                the page printed to PDF
   network.har             every request and response, bodies included
+  archive.warc.gz         replayable web archive (ReplayWeb.page, pywb), original bytes
   console.log             browser console output and page errors
   metadata.json           URLs, redirects, headers, server IP, TLS, timing
   manifest.json           SHA-256 of every file above
@@ -383,6 +396,18 @@ _TR: dict[str, str] = {
     "web.detail.requests.one": "{count} istek",
     "web.detail.requests.other": "{count} istek",
     "web.detail.metadata_json": "metadata (JSON)",
+    # --- WARC ---
+    "cli.capture.opt.warc": "Yeniden oynatılabilir archive.warc.gz de üret",
+    "cli.warc.help": "WARC'ı olmayan eski bir yakalama için HAR'dan WARC dosyası üret.",
+    "cli.warc.opt.output": "Çıktı yolu (varsayılan: ./webdamga-<id>.warc.gz)",
+    "cli.warc.exists": "Bu yakalamanın manifestosunda mühürlü bir WARC zaten var: {path}",
+    "cli.warc.no_har": "Bu yakalamada WARC üretilecek network.har yok.",
+    "cli.warc.records": "kayıt",
+    "cli.warc.written": "dosya",
+    "cli.warc.lossy": "{count} metin yanıtı, tarayıcının zaten UTF-8'e çözdüğü HAR'dan geldi. "
+    "Baytları sunucunun gönderdiğinden farklı olabilir; bu kayıtlar WebDamga-Body-Source: "
+    "har-text ile işaretlendi. Yeni yakalamalarda bu sorun yok.",
+    "web.detail.warc_hint": "archive.warc.gz, ReplayWeb.page (replayweb.page) ya da pywb ile yeniden oynatılabilir.",
     # --- Ağ yolu ---
     "cli.capture.opt.proxy": "Proxy üzerinden yakala, ör. socks5://127.0.0.1:9050 ya da http://kullanici:parola@sunucu:3128",
     "cli.capture.opt.tor": "Tor üzerinden yakala (socks5://127.0.0.1:9050)",
@@ -513,6 +538,7 @@ Gerçek bir Chromium tarayıcısıyla otomatik olarak alınmıştır.
   page.mhtml              kendi kendine yeten arşiv, Chrome'da açılır
   page.pdf                sayfanın PDF çıktısı
   network.har             tüm istek ve yanıtlar, gövdeler dahil
+  archive.warc.gz         yeniden oynatılabilir web arşivi (ReplayWeb.page, pywb), özgün baytlar
   console.log             tarayıcı konsolu ve sayfa hataları
   metadata.json           URL'ler, yönlendirmeler, başlıklar, sunucu IP, TLS
   manifest.json           yukarıdaki her dosyanın SHA-256 özeti

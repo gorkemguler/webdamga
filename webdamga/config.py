@@ -38,6 +38,7 @@ class CaptureSettings:
     proxy: str | None = None  # ör. socks5://127.0.0.1:9050, http://user:pass@host:3128
     proxy_profile: str | None = None  # <data>/proxies.json içindeki ad ya da "tor"
     record_egress: bool = False  # çıkış IP'sini check.torproject.org ile kaydet
+    warc: bool = True  # yeniden oynatılabilir archive.warc.gz üret
 
     def as_dict(self) -> dict:
         """metadata.json'a yazılan, okunur biçim. Proxy kimlik bilgisi içermez."""
@@ -57,6 +58,7 @@ class CaptureSettings:
             "proxy": redact_proxy(self.proxy),
             "proxy_profile": self.proxy_profile,
             "record_egress": self.record_egress,
+            "warc": self.warc,
         }
 
     def to_storage(self) -> dict:

@@ -4,11 +4,12 @@ Her yakalama `data/captures/<id>/` altında şu dosyaları üretir:
 
     screenshot.png            tam sayfa ekran görüntüsü
     screenshot-viewport.png   görünür alan (ekran üstü)
-    response.html             ana belgenin ham HTTP yanıt gövdesi (JS öncesi)
+    response.html             ana belgenin ham HTTP yanıt gövdesi (JS öncesi, charset'e dokunulmamış)
     dom.html                  JS çalıştıktan sonra render edilmiş DOM
     page.mhtml                tek dosyalık, kendi kendine yeten arşiv (CDP)
     page.pdf                  yazdır -> PDF
     network.har               tüm istek/yanıtlar (gövdeler gömülü)
+    archive.warc.gz           WARC/1.1, ham yanıt baytlarıyla yeniden oynatılabilir arşiv
     console.log               konsol mesajları + sayfa hataları
     metadata.json             URL, yönlendirme zinciri, başlıklar, IP, TLS, ...
     manifest.json             yukarıdaki her dosyanın SHA-256 özeti
@@ -18,6 +19,7 @@ Her yakalama `data/captures/<id>/` altında şu dosyaları üretir:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import platform
 import re
@@ -33,6 +35,7 @@ from playwright.async_api import Response, async_playwright
 from . import __version__
 from .config import CaptureSettings
 from .network import EGRESS_CHECK_URL, ProxyError, Route, ensure_reachable, parse_egress, resolve_route
+from .warc import WARC_NAME, ResponseRecorder, write_warc
 
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://")
 _SLUG_RE = re.compile(r"[^a-z0-9]+")
@@ -148,6 +151,7 @@ class _Run:
         self.errors: list[str] = []
         self.console_lines: list[str] = []
         self.page_errors: list[str] = []
+        self.recorder: ResponseRecorder | None = None
 
 
 def _resolve_network(run: _Run, data_dir: Path) -> Route | None:
@@ -196,8 +200,17 @@ async def _browse(run: _Run, route: Route) -> None:
             record_har_mode="full",
             record_har_content=settings.har_content,
         )
+        # Kaydedici WARC kapalıyken de çalışır: response.html'in ham baytları
+        # da buradan geliyor.
+        run.recorder = ResponseRecorder()
+        run.recorder.attach(context)
 
         page = await context.new_page()
+        cdp = await context.new_cdp_session(page)
+        try:
+            await run.recorder.attach_raw_bodies(cdp)
+        except PlaywrightError as exc:
+            run.errors.append(f"raw-bodies: {str(exc).splitlines()[0]}")
         page.on(
             "console",
             lambda msg: run.console_lines.append(f"[{_now_iso()}] {msg.type.upper():8} {msg.text}"),
@@ -252,12 +265,8 @@ async def _browse(run: _Run, route: Route) -> None:
             except PlaywrightError:
                 pass
 
-        # --- ana yanıtın ham gövdesi + ağ/aktarım meta ---
+        # --- ana yanıtın ağ/aktarım meta ---
         if main_response is not None:
-            try:
-                (out_dir / "response.html").write_bytes(await main_response.body())
-            except PlaywrightError:
-                pass
             try:
                 meta["http_status"] = main_response.status
                 meta["http_status_text"] = main_response.status_text
@@ -274,16 +283,32 @@ async def _browse(run: _Run, route: Route) -> None:
 
         # --- MHTML anlık görüntüsü (CDP) ---
         try:
-            cdp = await context.new_cdp_session(page)
             snapshot = await cdp.send("Page.captureSnapshot", {"format": "mhtml"})
             (out_dir / "page.mhtml").write_text(snapshot["data"], encoding="utf-8")
-            await cdp.detach()
         except PlaywrightError:
             pass
 
         meta["console_message_count"] = len(run.console_lines)
         meta["page_error_count"] = len(run.page_errors)
 
+        # Gövde okumaları tarayıcı açıkken bitmeli.
+        await run.recorder.drain()
+
+        # --- ana belgenin ham gövdesi ---
+        if main_response is not None:
+            document = run.recorder.main_document(main_response.url)
+            if document is not None and document.body_source == "raw":
+                (out_dir / "response.html").write_bytes(document.body)
+                meta["response_body_source"] = "raw"
+            else:
+                try:
+                    (out_dir / "response.html").write_bytes(await main_response.body())
+                    meta["response_body_source"] = "browser-decoded"
+                except PlaywrightError:
+                    pass
+
+        with contextlib.suppress(PlaywrightError):
+            await cdp.detach()
         await context.close()  # HAR bu noktada diske yazılır
         await browser.close()
 
@@ -335,6 +360,13 @@ async def capture(url: str, data_dir: Path, settings: CaptureSettings | None = N
     # --- sonlandırma ---
     meta["resource_summary"] = _summarize_har(run.har_path)
     meta["completed_at_utc"] = _now_iso()
+    if settings.warc and run.recorder is not None and run.recorder.exchanges:
+        try:
+            meta["warc"] = await asyncio.to_thread(
+                write_warc, out_dir / WARC_NAME, run.recorder.exchanges, meta=meta, capture_dir=out_dir
+            )
+        except Exception as exc:  # noqa: BLE001 - WARC olmadan da delil geçerli
+            run.errors.append(f"warc: {type(exc).__name__}: {exc}")
     meta["ok"] = not run.errors
     if run.errors:
         meta["error"] = "; ".join(run.errors)
