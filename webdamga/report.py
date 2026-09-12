@@ -15,14 +15,18 @@ from pathlib import Path
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 
 from . import __version__
-from .hashing import MANIFEST_NAME, MANIFEST_SIDECAR, sha256_bytes, sha256_file
+from .hashing import MANIFEST_NAME, MANIFEST_SIDECAR, SIGNATURE_NAME, sha256_bytes, sha256_file
 from .i18n import DEFAULT_LANG, t, translator
+from .signing import SigningError, parse_signature
 
 REPORT_NAME = "evidence-report.pdf"
 PACKAGE_README = "README.txt"
+SIGNER_PUB = "signer.pub"
 
-# ZIP içindeki zaman damgaları yakalama anına sabitlenir; aynı yakalamadan
-# üretilen paketler böylece bit bit aynı olur ve özeti tekrar üretilebilir.
+# ZIP girdilerinin tarihleri sabit tutulur ki paket, dosyaların yerel diskteki
+# değişiklik zamanlarını sızdırmasın. Paket yine de her üretildiğinde farklı
+# bir özete sahip olabilir: README.txt paketleme zamanını, PDF üretim zamanını
+# taşır. Bu yüzden kayda geçirilmesi gereken, gönderim anındaki paket özetidir.
 _ZIP_EPOCH = (1980, 1, 1, 0, 0, 0)
 
 _env = Environment(
@@ -49,6 +53,27 @@ def _manifest_sha256(capture_dir: Path) -> str | None:
     return sha256_file(manifest) if manifest.is_file() else None
 
 
+def signature_info(capture_dir: Path, meta: dict) -> dict | None:
+    """Klasörde imza varsa anahtar kimliği, güvenilir yorum ve public key."""
+    sig_path = Path(capture_dir) / SIGNATURE_NAME
+    if not sig_path.is_file():
+        return None
+    try:
+        _, key_id, _, comment, _ = parse_signature(sig_path.read_text(encoding="utf-8"))
+    except SigningError:
+        return None
+    signing = meta.get("signing") or {}
+    key_hex = key_id[::-1].hex().upper()
+    public = signing.get("public_key") if signing.get("key_id") == key_hex else None
+    return {"key_id": key_hex, "trusted_comment": comment, "public_key": public}
+
+
+def _signer_pub_file(info: dict) -> str | None:
+    if not info or not info.get("public_key"):
+        return None
+    return f"untrusted comment: minisign public key {info['key_id']}\n{info['public_key']}\n"
+
+
 def build_report_html(capture_dir: Path, meta: dict, manifest: dict, lang: str = DEFAULT_LANG) -> str:
     """PDF'e basılacak raporun HTML'ini üretir."""
     # Rapora ekran üstü görüntüyü gömüyoruz; tam sayfa görüntü çok büyük
@@ -65,6 +90,7 @@ def build_report_html(capture_dir: Path, meta: dict, manifest: dict, lang: str =
         screenshot=screenshot,
         generated_utc=_now_iso(),
         manifest_sha256=_manifest_sha256(capture_dir),
+        signature=signature_info(capture_dir, meta),
     )
 
 
@@ -86,7 +112,17 @@ async def render_report_pdf(capture_dir: Path, meta: dict, manifest: dict, lang:
     return pdf
 
 
-def build_readme(meta: dict, lang: str = DEFAULT_LANG) -> str:
+def build_readme(
+    meta: dict, lang: str = DEFAULT_LANG, *, signature: dict | None = None, pdf: bool = True
+) -> str:
+    packaging = [PACKAGE_README] + ([REPORT_NAME] if pdf else [])
+    section = ""
+    if signature:
+        section = t("pkg.readme.signature", lang, key_id=signature["key_id"])
+        if signature.get("public_key"):
+            packaging.append(SIGNER_PUB)
+    joiner = " ve " if lang == "tr" else " and "
+    files = ", ".join(packaging[:-1]) + joiner + packaging[-1] if len(packaging) > 1 else packaging[0]
     return t(
         "pkg.readme",
         lang,
@@ -95,6 +131,8 @@ def build_readme(meta: dict, lang: str = DEFAULT_LANG) -> str:
         captured=meta.get("completed_at_utc", "?"),
         packaged=_now_iso(),
         version=__version__,
+        signature_section=section,
+        packaging_files=files,
     )
 
 
@@ -116,10 +154,15 @@ def build_package(
         info.external_attr = 0o644 << 16
         zf.writestr(info, data)
 
+    signature = signature_info(capture_dir, meta)
     with zipfile.ZipFile(out_path, "w", compression=zipfile.ZIP_DEFLATED) as zf:
-        _write(zf, PACKAGE_README, build_readme(meta, lang).encode("utf-8"))
+        readme = build_readme(meta, lang, signature=signature, pdf=bool(pdf_bytes))
+        _write(zf, PACKAGE_README, readme.encode("utf-8"))
         if pdf_bytes:
             _write(zf, REPORT_NAME, pdf_bytes)
+        pub = _signer_pub_file(signature)
+        if pub:
+            _write(zf, SIGNER_PUB, pub.encode("utf-8"))
         for path in sorted(capture_dir.iterdir()):
             if path.is_file():
                 _write(zf, path.name, path.read_bytes())

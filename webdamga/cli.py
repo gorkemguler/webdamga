@@ -23,6 +23,15 @@ from .hashing import verify_capture
 from .i18n import SUPPORTED_LANGS, detect_lang, normalize_lang, t, tn
 from .network import TOR_PROFILE, ProxyError, load_profiles, redact_proxy
 from .report import default_package_name, export_package
+from .seal import SIGNATURE_NAME, trusted_comment
+from .signing import (
+    SigningError,
+    default_key_dir,
+    generate_keypair,
+    load_public_key,
+    load_secret_key,
+    sign_file,
+)
 from .storage import JOB_ACTIVE, Store
 from .warc import WARC_NAME, exchanges_from_har, write_warc
 
@@ -44,6 +53,7 @@ console = Console()
 
 _DataDir = typer.Option(None, "--data-dir", "-d", help=_h("cli.opt.data_dir"))
 _ExportOutput = typer.Option(None, "--output", "-o", help=_h("cli.export.opt.output"))
+_PubKey = typer.Option(None, "--pubkey", "-P", help=_h("cli.verify.opt.pubkey"))
 _WarcOutput = typer.Option(None, "--output", "-o", help=_h("cli.warc.opt.output"))
 
 
@@ -82,6 +92,7 @@ def capture(
     via: str | None = typer.Option(None, "--via", help=_h("cli.capture.opt.via")),
     record_egress: bool = typer.Option(False, "--record-egress", help=_h("cli.capture.opt.record_egress")),
     warc: bool = typer.Option(True, "--warc/--no-warc", help=_h("cli.capture.opt.warc")),
+    sign: bool = typer.Option(True, "--sign/--no-sign", help=_h("cli.capture.opt.sign")),
 ) -> None:
     """Capture a URL and seal the evidence folder."""
     lang = _lang()
@@ -102,6 +113,7 @@ def capture(
         proxy_profile=TOR_PROFILE if tor else via,
         record_egress=record_egress,
         warc=warc,
+        sign=sign,
     )
     if user_agent:
         settings.user_agent = user_agent
@@ -155,6 +167,11 @@ def capture(
         table.add_row(t("cli.field.egress", lang), f"{egress['ip']}{tor_note}")
     table.add_row(t("cli.field.folder", lang), meta["dir"])
     table.add_row(t("cli.field.manifest", lang), meta.get("manifest_sha256", "-"))
+    signing = meta.get("signing") or {}
+    if meta.get("signature_file"):
+        table.add_row(t("cli.field.signed_by", lang), signing.get("key_id", "-"))
+    elif signing.get("error"):
+        table.add_row(t("cli.field.signed_by", lang), f"[red]{signing['error']}[/]")
     console.print(table)
     if meta.get("error"):
         console.print(f"[yellow]{t('cli.warning', lang)}[/] {meta['error']}")
@@ -192,6 +209,7 @@ def list_captures(
 def verify(
     capture_id: str = typer.Argument(..., help=_h("cli.verify.arg.id")),
     data_dir: Path | None = _DataDir,
+    pubkey: str | None = _PubKey,
 ) -> None:
     """Verify a capture folder against its manifest."""
     lang = _lang()
@@ -200,7 +218,12 @@ def verify(
         console.print(f"[red]{t('cli.verify.not_found', lang)}[/] {cap_dir}")
         raise typer.Exit(1)
 
-    result = verify_capture(cap_dir)
+    try:
+        key = load_public_key(pubkey) if pubkey else None
+    except SigningError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(1) from exc
+    result = verify_capture(cap_dir, key)
     table = Table(title=f"{t('cli.verify.title', lang)} · {capture_id}")
     table.add_column(t("cli.col.file", lang), style="cyan")
     table.add_column(t("cli.col.status", lang))
@@ -209,7 +232,18 @@ def verify(
         status = item["status"]
         color = palette.get(status, "white")
         table.add_row(item["name"], f"[{color}]{t(f'web.status.{status}', lang)}[/]")
+    signature = result.get("signature") or {}
+    if signature.get("present"):
+        if signature.get("ok") is True:
+            status = f"[green]{t('cli.verify.sig_ok', lang)}[/]"
+        elif signature.get("ok") is False:
+            status = f"[red]{t('cli.verify.sig_bad', lang)}[/] ({signature.get('error')})"
+        else:
+            status = f"[yellow]{t('cli.verify.sig_unchecked', lang)}[/]"
+        table.add_row(SIGNATURE_NAME, status)
     console.print(table)
+    if signature.get("trusted_comment"):
+        console.print(f"[dim]{t('cli.verify.sig_comment', lang)}: {signature['trusted_comment']}[/]")
     if result["ok"]:
         console.print(f"\n[green]{t('cli.verify.intact', lang)}[/]")
         raise typer.Exit(0)
@@ -283,6 +317,66 @@ def jobs(
             row["capture_id"] or "-",
         )
     console.print(table)
+
+
+@app.command(help=_h("cli.keygen.help"))
+def keygen(force: bool = typer.Option(False, "--force", help=_h("cli.keygen.opt.force"))) -> None:
+    """Create a signing key."""
+    lang = _lang()
+    try:
+        secret = generate_keypair(force=force)
+    except SigningError as exc:
+        console.print(f"[yellow]{exc}[/]")
+        console.print(t("cli.keygen.force_hint", lang))
+        raise typer.Exit(1) from exc
+    public = secret.public_key()
+    key_dir = default_key_dir()
+    console.print(f"[green]{t('cli.keygen.done', lang)}[/]\n")
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="dim")
+    table.add_column(overflow="fold")
+    table.add_row(t("cli.keygen.key_id", lang), public.id)
+    table.add_row(t("cli.keygen.public", lang), public.base64)
+    table.add_row(t("cli.keygen.secret_file", lang), str(key_dir / "webdamga.key"))
+    console.print(table)
+    console.print(f"\n{t('cli.keygen.share', lang)}")
+    console.print(f"[yellow]{t('cli.keygen.protect', lang)}[/]")
+
+
+@app.command(help=_h("cli.pubkey.help"))
+def pubkey() -> None:
+    """Print the public key."""
+    lang = _lang()
+    public = load_public_key()
+    if public is None:
+        console.print(f"[yellow]{t('cli.pubkey.missing', lang)}[/]")
+        raise typer.Exit(1)
+    console.print(public.to_minisign(), end="")
+
+
+@app.command(help=_h("cli.sign.help"))
+def sign(
+    capture_id: str = typer.Argument(..., help=_h("cli.export.arg.id")),
+    data_dir: Path | None = _DataDir,
+    force: bool = typer.Option(False, "--force", help=_h("cli.sign.opt.force")),
+) -> None:
+    """Sign an existing capture's manifest."""
+    lang = _lang()
+    cap_dir = _resolve_data_dir(data_dir) / "captures" / capture_id
+    manifest = cap_dir / "manifest.json"
+    if not manifest.is_file():
+        console.print(f"[red]{t('cli.verify.not_found', lang)}[/] {manifest}")
+        raise typer.Exit(1)
+    if (cap_dir / SIGNATURE_NAME).exists() and not force:
+        console.print(f"[yellow]{t('cli.sign.exists', lang)}[/]")
+        raise typer.Exit(1)
+    secret = load_secret_key()
+    if secret is None:
+        console.print(f"[red]{t('cli.pubkey.missing', lang)}[/]")
+        raise typer.Exit(1)
+    # Mühürlenmiş manifestoya dokunulmaz; imza yanına ayrı dosya olarak yazılır.
+    sig = sign_file(manifest, secret, trusted_comment(capture_id))
+    console.print(f"[green]{t('cli.sign.done', lang)}[/] {sig} ({secret.id})")
 
 
 @app.command("warc", help=_h("cli.warc.help"))

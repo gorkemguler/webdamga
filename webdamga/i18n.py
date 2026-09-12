@@ -121,6 +121,40 @@ _EN: dict[str, str] = {
     "web.detail.requests.one": "{count} request",
     "web.detail.requests.other": "{count} requests",
     "web.detail.metadata_json": "metadata (JSON)",
+    # --- Signing ---
+    "cli.capture.opt.sign": "Sign the manifest if a signing key exists (webdamga keygen)",
+    "cli.field.signed_by": "signed by key",
+    "cli.verify.opt.pubkey": "Public key to check the signature against: a .pub file or the base64 key",
+    "cli.verify.sig_ok": "signature valid",
+    "cli.verify.sig_bad": "SIGNATURE INVALID",
+    "cli.verify.sig_unchecked": "signed, but no public key to check it against (use --pubkey)",
+    "cli.verify.sig_comment": "trusted comment",
+    "cli.keygen.help": "Create the key used to sign capture manifests.",
+    "cli.keygen.opt.force": "Replace an existing key (old signatures stay valid against the old public key only)",
+    "cli.keygen.force_hint": "Use --force to replace it.",
+    "cli.keygen.done": "Signing key created. New captures will be signed automatically.",
+    "cli.keygen.key_id": "key id",
+    "cli.keygen.public": "public key",
+    "cli.keygen.secret_file": "secret key",
+    "cli.keygen.share": "Publish the public key somewhere others can find it (your site, a GitHub "
+    "profile, the report itself). Anyone can then check a signature with: "
+    "minisign -Vm manifest.json -P <public key>",
+    "cli.keygen.protect": "The secret key is stored unencrypted so queued and scheduled captures "
+    "can sign unattended. Anyone who can read that file can sign as you.",
+    "cli.pubkey.help": "Print the public key in minisign format.",
+    "cli.pubkey.missing": "No signing key yet. Create one with: webdamga keygen",
+    "cli.sign.help": "Sign the manifest of an existing capture.",
+    "cli.sign.opt.force": "Replace an existing signature",
+    "cli.sign.exists": "This capture is already signed. Use --force to replace the signature.",
+    "cli.sign.done": "signed:",
+    "web.detail.signed_by": "signed by key",
+    "web.detail.unsigned": "not signed",
+    "web.detail.sig_ok": "signature valid",
+    "web.detail.sig_bad": "SIGNATURE INVALID",
+    "web.detail.sig_unchecked": "signed, but no local public key to check it against",
+    "report.field.signature": "Signature",
+    "report.signature.value": "minisign Ed25519, key {key_id}",
+    "report.verify.signature": "Check who sealed it, using the signer's public key:",
     # --- WARC ---
     "cli.capture.opt.warc": "Also write a replayable archive.warc.gz",
     "cli.warc.help": "Build a WARC file from the HAR of an older capture that does not have one.",
@@ -229,6 +263,20 @@ _EN: dict[str, str] = {
     "report.screenshot.caption": "Above the fold, as the page rendered at capture time. "
     "The full page screenshot is included in the package as screenshot.png.",
     "report.screenshot.missing": "No screenshot was produced for this capture.",
+    "pkg.readme.signature": """
+WHO SEALED IT
+-------------
+manifest.json is signed with an Ed25519 key (id {key_id}). The signature
+catches something the checksums alone cannot: someone editing a file and then
+regenerating manifest.json to match. Check it with minisign
+(https://jedisct1.github.io/minisign/):
+
+     minisign -Vm manifest.json -p signer.pub
+
+signer.pub is included for convenience, but a key shipped inside the package
+cannot vouch for itself. Compare it with the public key the sender published
+somewhere you already trust.
+""",
     "report.verify.intro": "Every artefact in this package is listed in manifest.json "
     "together with its SHA-256 checksum. To confirm nothing has been altered:",
     "report.verify.step1": "Recompute the checksums and compare them with manifest.json.",
@@ -283,9 +331,9 @@ HOW TO VERIFY IT
 3. If you have webdamga installed, both checks run together:
 
      webdamga verify {capture_id}
-
-README.txt and evidence-report.pdf were created while packaging, so they are
-not listed in manifest.json. Every other file is.
+{signature_section}
+{packaging_files} were created while packaging, so they are not listed in
+manifest.json. Every other file is.
 
 Produced by webdamga v{version}. https://github.com/gorkemguler/webdamga
 """,
@@ -396,6 +444,40 @@ _TR: dict[str, str] = {
     "web.detail.requests.one": "{count} istek",
     "web.detail.requests.other": "{count} istek",
     "web.detail.metadata_json": "metadata (JSON)",
+    # --- İmzalama ---
+    "cli.capture.opt.sign": "İmza anahtarı varsa manifestoyu imzala (webdamga keygen)",
+    "cli.field.signed_by": "imzalayan anahtar",
+    "cli.verify.opt.pubkey": "İmzanın doğrulanacağı public key: .pub dosyası ya da base64 anahtar",
+    "cli.verify.sig_ok": "imza geçerli",
+    "cli.verify.sig_bad": "İMZA GEÇERSİZ",
+    "cli.verify.sig_unchecked": "imzalı ama doğrulanacak public key yok (--pubkey kullan)",
+    "cli.verify.sig_comment": "güvenilir yorum",
+    "cli.keygen.help": "Yakalama manifestolarını imzalayacak anahtarı oluştur.",
+    "cli.keygen.opt.force": "Mevcut anahtarı değiştir (eski imzalar yalnızca eski public key ile doğrulanır)",
+    "cli.keygen.force_hint": "Değiştirmek için --force kullan.",
+    "cli.keygen.done": "İmza anahtarı oluşturuldu. Yeni yakalamalar otomatik imzalanacak.",
+    "cli.keygen.key_id": "anahtar id",
+    "cli.keygen.public": "public key",
+    "cli.keygen.secret_file": "gizli anahtar",
+    "cli.keygen.share": "Public key'i başkalarının bulabileceği bir yerde yayınla (siten, GitHub "
+    "profilin, raporun kendisi). Herkes imzayı şöyle doğrulayabilir: "
+    "minisign -Vm manifest.json -P <public key>",
+    "cli.keygen.protect": "Gizli anahtar, kuyruktaki ve zamanlanmış yakalamalar gözetimsiz "
+    "imzalayabilsin diye şifrelenmeden saklanıyor. O dosyayı okuyabilen herkes senin adına imzalayabilir.",
+    "cli.pubkey.help": "Public key'i minisign biçiminde yazdır.",
+    "cli.pubkey.missing": "Henüz imza anahtarı yok. Oluşturmak için: webdamga keygen",
+    "cli.sign.help": "Mevcut bir yakalamanın manifestosunu imzala.",
+    "cli.sign.opt.force": "Mevcut imzayı değiştir",
+    "cli.sign.exists": "Bu yakalama zaten imzalı. İmzayı değiştirmek için --force kullan.",
+    "cli.sign.done": "imzalandı:",
+    "web.detail.signed_by": "imzalayan anahtar",
+    "web.detail.unsigned": "imzasız",
+    "web.detail.sig_ok": "imza geçerli",
+    "web.detail.sig_bad": "İMZA GEÇERSİZ",
+    "web.detail.sig_unchecked": "imzalı ama doğrulanacak yerel public key yok",
+    "report.field.signature": "İmza",
+    "report.signature.value": "minisign Ed25519, anahtar {key_id}",
+    "report.verify.signature": "Kimin mühürlediğini imzalayanın public key'iyle doğrulayın:",
     # --- WARC ---
     "cli.capture.opt.warc": "Yeniden oynatılabilir archive.warc.gz de üret",
     "cli.warc.help": "WARC'ı olmayan eski bir yakalama için HAR'dan WARC dosyası üret.",
@@ -503,6 +585,20 @@ _TR: dict[str, str] = {
     "report.screenshot.caption": "Yakalama anında sayfanın ekran üstünde göründüğü hâli. "
     "Tam sayfa görüntü pakette screenshot.png olarak yer alıyor.",
     "report.screenshot.missing": "Bu yakalamada ekran görüntüsü üretilemedi.",
+    "pkg.readme.signature": """
+KİM MÜHÜRLEDİ
+-------------
+manifest.json bir Ed25519 anahtarıyla (id {key_id}) imzalıdır. İmza, tek
+başına özetlerin yakalayamayacağı bir şeyi yakalar: birinin bir dosyayı
+değiştirip manifest.json'u da ona göre yeniden üretmesini. minisign ile
+doğrulayın (https://jedisct1.github.io/minisign/):
+
+     minisign -Vm manifest.json -p signer.pub
+
+signer.pub kolaylık olsun diye pakete eklendi, ama paketin içinden gelen bir
+anahtar kendi kendine kefil olamaz. Gönderenin önceden güvendiğiniz bir yerde
+yayınladığı public key ile karşılaştırın.
+""",
     "report.verify.intro": "Paketteki her delil, SHA-256 özetiyle birlikte manifest.json "
     "içinde listelidir. Hiçbir şeyin değişmediğini doğrulamak için:",
     "report.verify.step1": "Özetleri yeniden hesaplayıp manifest.json ile karşılaştırın.",
@@ -557,9 +653,9 @@ NASIL DOĞRULANIR
 3. webdamga kuruluysa iki kontrol tek komutta çalışır:
 
      webdamga verify {capture_id}
-
-README.txt ve evidence-report.pdf paketleme sırasında oluşturulduğu için
-manifest.json'da listelenmez. Diğer tüm dosyalar listelidir.
+{signature_section}
+{packaging_files} paketleme sırasında oluşturulduğu için manifest.json'da
+listelenmez. Diğer tüm dosyalar listelidir.
 
 webdamga v{version} ile üretildi. https://github.com/gorkemguler/webdamga
 """,

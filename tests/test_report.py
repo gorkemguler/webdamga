@@ -100,8 +100,15 @@ def test_package_files_survive_the_round_trip(capture, tmp_path: Path) -> None:
         assert sha256_file(root / entry["name"]) == entry["sha256"], entry["name"]
 
 
-def test_package_is_deterministic(capture, tmp_path: Path) -> None:
-    """Aynı yakalamadan üretilen paketler aynı özeti vermeli."""
+def test_package_is_deterministic_for_identical_inputs(capture, tmp_path: Path, monkeypatch) -> None:
+    """Girdiler (README zamanı ve PDF dahil) aynıysa paket özeti de aynı olmalı.
+
+    Farklı zamanlarda üretilen paketler README.txt'deki paketleme zamanı
+    yüzünden farklı özet verir; bu beklenen davranış.
+    """
+    from webdamga import report
+
+    monkeypatch.setattr(report, "_now_iso", lambda: "2026-01-01T00:00:00Z")
     cap, meta, _ = capture
     _, first = build_package(cap, meta, tmp_path / "a.zip", "en", pdf_bytes=b"%PDF-fake")
     _, second = build_package(cap, meta, tmp_path / "b.zip", "en", pdf_bytes=b"%PDF-fake")

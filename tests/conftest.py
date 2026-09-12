@@ -9,5 +9,15 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 # tests/ altındaki yardımcı modüller (proxy_server gibi) doğrudan import edilebilsin.
 sys.path.insert(0, str(Path(__file__).parent))
+
+
+@pytest.fixture(autouse=True)
+def _isolated_signing_keys(tmp_path_factory: pytest.TempPathFactory, monkeypatch: pytest.MonkeyPatch) -> Path:
+    """Testler kullanıcının gerçek imza anahtarını ne okusun ne de üzerine yazsın."""
+    key_dir = tmp_path_factory.mktemp("keys")
+    monkeypatch.setenv("WEBDAMGA_KEY_DIR", str(key_dir))
+    return key_dir

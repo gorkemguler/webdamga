@@ -171,6 +171,11 @@
 <div class="anchor">
   <div class="label">{{ _('report.field.manifest_sha') }}</div>
   <div class="value">{{ manifest_sha256 }}</div>
+  {% if signature %}
+  <div class="label" style="margin-top:6pt">{{ _('report.field.signature') }}</div>
+  <div class="value">{{ _('report.signature.value', key_id=signature.key_id) }}</div>
+  {% if signature.public_key %}<div class="value">{{ signature.public_key }}</div>{% endif %}
+  {% endif %}
 </div>
 {% endif %}
 <table>
@@ -197,6 +202,10 @@
     <pre>shasum -a 256 screenshot.png dom.html response.html</pre></li>
   <li>{{ _('report.verify.step2') }}
     <pre>shasum -a 256 -c manifest.sha256</pre></li>
+  {% if signature %}
+  <li>{{ _('report.verify.signature') }}
+    <pre>minisign -Vm manifest.json -p signer.pub</pre></li>
+  {% endif %}
   <li>{{ _('report.verify.step3') }}
     <pre>webdamga verify {{ m.capture_id }}</pre></li>
 </ol>

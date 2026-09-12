@@ -16,7 +16,14 @@ from pathlib import Path
 _BUFSIZE = 1 << 20
 MANIFEST_NAME = "manifest.json"
 MANIFEST_SIDECAR = "manifest.sha256"
-_EXCLUDE = {MANIFEST_NAME, MANIFEST_SIDECAR}
+SIGNATURE_NAME = MANIFEST_NAME + ".minisig"
+RFC3161_NAME = MANIFEST_NAME + ".tsr"
+OTS_NAME = MANIFEST_NAME + ".ots"
+
+# Manifestoyu mühürleyen dosyalar manifestodan sonra üretilir; manifestoda
+# listelenmezler ve "listede yok" sayılmazlar.
+SEAL_FILES = {MANIFEST_NAME, MANIFEST_SIDECAR, SIGNATURE_NAME, RFC3161_NAME, OTS_NAME}
+_EXCLUDE = SEAL_FILES
 
 
 def sha256_file(path: Path) -> str:
@@ -66,8 +73,13 @@ def write_manifest(capture_dir: Path, manifest: dict) -> str:
     return digest
 
 
-def verify_capture(capture_dir: Path) -> dict:
-    """Yakalama klasörünü manifestoya göre doğrular."""
+def verify_capture(capture_dir: Path, public_key=None) -> dict:
+    """Yakalama klasörünü manifestoya göre doğrular.
+
+    `public_key` verilmezse varsayılan anahtar dizinindeki public key
+    kullanılır. İmza varsa ama doğrulanacak anahtar yoksa sonuç etkilenmez,
+    `signature.ok` None olur.
+    """
     manifest_path = capture_dir / MANIFEST_NAME
     if not manifest_path.exists():
         return {"ok": False, "capture_id": capture_dir.name, "error": "manifest.json yok", "files": []}
@@ -107,10 +119,43 @@ def verify_capture(capture_dir: Path) -> dict:
         if not sidecar_ok:
             ok = False
 
+    signature = _check_signature(capture_dir, public_key)
+    if signature["present"] and signature["ok"] is False:
+        ok = False
+
     return {
         "ok": ok,
         "capture_id": capture_dir.name,
         "manifest_sha256": manifest_digest,
         "sidecar_ok": sidecar_ok,
+        "signature": signature,
         "files": results,
     }
+
+
+def _check_signature(capture_dir: Path, public_key) -> dict:
+    from .signing import PublicKey, SigningError, load_public_key, parse_signature, verify_file
+
+    sig_path = capture_dir / SIGNATURE_NAME
+    if not sig_path.is_file():
+        return {"present": False, "ok": None}
+
+    try:
+        _, key_id, _, comment, _ = parse_signature(sig_path.read_text(encoding="utf-8"))
+        signed_by = key_id[::-1].hex().upper()
+    except SigningError as exc:
+        return {"present": True, "ok": False, "error": str(exc)}
+
+    try:
+        key = public_key if isinstance(public_key, PublicKey) else load_public_key(public_key)
+    except SigningError as exc:
+        return {"present": True, "ok": None, "key_id": signed_by, "error": f"public key: {exc}"}
+    if key is None:
+        return {
+            "present": True,
+            "ok": None,
+            "key_id": signed_by,
+            "trusted_comment": comment,
+            "error": "no public key available to check the signature against",
+        }
+    return {"present": True, **verify_file(capture_dir / MANIFEST_NAME, key).as_dict()}

@@ -35,6 +35,7 @@ from playwright.async_api import Response, async_playwright
 from . import __version__
 from .config import CaptureSettings
 from .network import EGRESS_CHECK_URL, ProxyError, Route, ensure_reachable, parse_egress, resolve_route
+from .seal import prepare_signing, seal_capture
 from .warc import WARC_NAME, ResponseRecorder, write_warc
 
 _SCHEME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9+.\-]*://")
@@ -371,12 +372,17 @@ async def capture(url: str, data_dir: Path, settings: CaptureSettings | None = N
     if run.errors:
         meta["error"] = "; ".join(run.errors)
 
+    # İmza anahtarının kimliği metadata'ya manifestodan önce girsin.
+    secret, signing = prepare_signing(settings.sign)
+    if signing is not None:
+        meta["signing"] = signing
+
     (out_dir / "metadata.json").write_text(
         json.dumps(meta, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8"
     )
 
-    from .hashing import build_manifest, write_manifest
-
-    manifest = build_manifest(out_dir, tool="webdamga", tool_version=__version__, meta=meta)
-    meta["manifest_sha256"] = write_manifest(out_dir, manifest)
+    sealed = seal_capture(out_dir, meta, secret)
+    meta["manifest_sha256"] = sealed["manifest_sha256"]
+    if sealed["signature"]:
+        meta["signature_file"] = sealed["signature"]
     return meta

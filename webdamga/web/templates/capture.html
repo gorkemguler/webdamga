@@ -25,6 +25,8 @@
       <dt>{{ _('web.detail.egress') }}</dt>
       <dd>{{ net.egress.ip }} <span class="dim">&middot; {{ _('web.detail.egress.tor') if net.egress.is_tor else _('web.detail.egress.not_tor') }}</span></dd>
       {% endif %}
+      <dt>{{ _('web.detail.signed_by') }}</dt>
+      <dd>{% if m.signing and m.signing.key_id %}<code>{{ m.signing.key_id }}</code>{% else %}<span class="dim">{{ _('web.detail.unsigned') }}</span>{% endif %}</dd>
       {% if m.browser %}<dt>{{ _('web.detail.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>{% endif %}
       <dt>{{ _('web.detail.user_agent') }}</dt><dd class="dim">{{ m.user_agent }}</dd>
       <dt>{{ _('web.detail.captured_by') }}</dt><dd class="dim">{{ m.capture_host.hostname }} &middot; {{ m.capture_host.platform }}</dd>
@@ -76,7 +78,10 @@
        data-status-ok="{{ _('web.status.ok') }}"
        data-status-modified="{{ _('web.status.modified') }}"
        data-status-missing="{{ _('web.status.missing') }}"
-       data-status-unlisted="{{ _('web.status.unlisted') }}"></div>
+       data-status-unlisted="{{ _('web.status.unlisted') }}"
+       data-sig-ok="{{ _('web.detail.sig_ok') }}"
+       data-sig-bad="{{ _('web.detail.sig_bad') }}"
+       data-sig-unchecked="{{ _('web.detail.sig_unchecked') }}"></div>
   <table class="list">
     <thead><tr>
       <th>{{ _('web.col.file') }}</th>
@@ -116,7 +121,15 @@
       var data = await res.json();
       var head = '<div class="banner ' + (data.ok ? 'ok' : 'err') + '">' +
         (data.ok ? out.dataset.intact : out.dataset.broken) + '</div>';
-      out.innerHTML = head + '<ul class="verify-list">' +
+      var sig = data.signature || {};
+      var sigLine = '';
+      if (sig.present) {
+        var label = sig.ok === true ? out.dataset.sigOk : (sig.ok === false ? out.dataset.sigBad : out.dataset.sigUnchecked);
+        var cls = sig.ok === true ? 'ok' : (sig.ok === false ? 'err' : '');
+        sigLine = '<li><code>manifest.json.minisig</code>: <b class="' + cls + '">' + label + '</b>' +
+          (sig.key_id ? ' <span class="dim">(' + sig.key_id + ')</span>' : '') + '</li>';
+      }
+      out.innerHTML = head + '<ul class="verify-list">' + sigLine +
         data.files.map(function (f) {
           return '<li><code>' + f.name + '</code>: <b>' + (labels[f.status] || f.status) + '</b></li>';
         }).join('') + '</ul>';

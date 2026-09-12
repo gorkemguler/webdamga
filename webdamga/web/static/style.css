@@ -140,6 +140,8 @@ dd { margin: 0; word-break: break-word; }
 .banner.err { background: rgba(255, 107, 107, .12); color: var(--err); }
 
 .verify-list { margin: 6px 0 0; padding-left: 20px; }
+.verify-list b.ok { color: var(--ok); }
+.verify-list b.err { color: var(--err); }
 
 /* --- kuyruk / iş durumu --- */
 .badge { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; }
