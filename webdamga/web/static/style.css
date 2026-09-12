@@ -140,6 +140,31 @@ dd { margin: 0; word-break: break-word; }
 .banner.err { background: rgba(255, 107, 107, .12); color: var(--err); }
 
 .verify-list { margin: 6px 0 0; padding-left: 20px; }
+
+/* --- kuyruk / iş durumu --- */
+.badge { display: inline-block; padding: 1px 7px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+.badge.status-queued { background: #2a2f3a; color: var(--dim); }
+.badge.status-running { background: rgba(79, 209, 197, .15); color: var(--acc); }
+.badge.status-done { background: rgba(81, 207, 102, .15); color: var(--ok); }
+.badge.status-failed { background: rgba(255, 107, 107, .15); color: var(--err); }
+.badge.status-cancelled { background: #2a2f3a; color: var(--dim); text-decoration: line-through; }
+
+button.ghost { background: transparent; color: var(--dim); border: 1px solid var(--line); }
+button.ghost:hover { color: var(--fg); border-color: var(--dim); }
+
+.job-url code { word-break: break-all; }
+.job-state { display: flex; align-items: center; gap: 10px; font-size: 15px; }
+.job-meta { margin-top: 18px; }
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--line);
+  border-top-color: var(--acc);
+  border-radius: 50%;
+  animation: spin .8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
 .badge.err { background: var(--err); color: #2a0000; padding: 1px 6px; border-radius: 4px; font-size: 11px; }
 tr.err td { color: var(--err); }
 .dim { color: var(--dim); }

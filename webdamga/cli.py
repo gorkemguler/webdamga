@@ -22,7 +22,7 @@ from .config import CaptureSettings, default_data_dir
 from .hashing import verify_capture
 from .i18n import SUPPORTED_LANGS, detect_lang, normalize_lang, t, tn
 from .report import default_package_name, export_package
-from .storage import Store
+from .storage import JOB_ACTIVE, Store
 
 # Yardım metinleri decorator zamanında kurulduğu için ortamdan gelen dile bağlı.
 _HELP_LANG = detect_lang()
@@ -221,10 +221,43 @@ def export(
     table.add_row(t("cli.export.written", lang), str(package))
     table.add_row(t("cli.export.size", lang), f"{package.stat().st_size / 1024:.1f} KB")
     table.add_row(t("cli.export.sha", lang), digest)
-    if meta.get("manifest_sha256_sidecar"):
-        table.add_row(t("cli.export.manifest_sha", lang), meta["manifest_sha256_sidecar"])
+    sidecar = cap_dir / "manifest.sha256"
+    if sidecar.is_file():
+        table.add_row(t("cli.export.manifest_sha", lang), sidecar.read_text(encoding="utf-8").split()[0])
     console.print(table)
     console.print(f"\n[green]{t('cli.export.done', lang)}[/]")
+
+
+@app.command(help=_h("cli.jobs.help"))
+def jobs(
+    data_dir: Path | None = _DataDir,
+    show_all: bool = typer.Option(False, "--all", "-a", help=_h("cli.jobs.opt.all")),
+    limit: int = typer.Option(20, "--limit", "-n", help=_h("cli.list.opt.limit")),
+) -> None:
+    """Show the capture queue."""
+    lang = _lang()
+    store = Store(_resolve_data_dir(data_dir))
+    rows = store.list_jobs(statuses=None if show_all else JOB_ACTIVE, limit=limit)
+    if not rows:
+        console.print(f"[dim]{t('cli.jobs.empty', lang)}[/]")
+        raise typer.Exit()
+    palette = {"queued": "dim", "running": "cyan", "done": "green", "failed": "red", "cancelled": "dim"}
+    table = Table()
+    table.add_column("id", style="cyan", no_wrap=True)
+    table.add_column(t("cli.col.url", lang), overflow="fold")
+    table.add_column(t("cli.col.status", lang), no_wrap=True)
+    table.add_column(t("cli.col.source", lang), no_wrap=True)
+    table.add_column(t("cli.col.capture", lang), overflow="fold")
+    for row in rows:
+        color = palette.get(row["status"], "white")
+        table.add_row(
+            row["id"],
+            row["url"],
+            f"[{color}]{t('web.job.status.' + row['status'], lang)}[/]",
+            row["source"],
+            row["capture_id"] or "-",
+        )
+    console.print(table)
 
 
 @app.command(help=_h("cli.serve.help"))

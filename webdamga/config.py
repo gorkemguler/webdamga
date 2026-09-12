@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass, fields
 from pathlib import Path
 
 
@@ -37,6 +37,7 @@ class CaptureSettings:
     har_content: str = "embed"  # embed | attach | omit
 
     def as_dict(self) -> dict:
+        """metadata.json'a yazılan, okunur biçim."""
         return {
             "wait_until": self.wait_until,
             "timeout_ms": self.timeout_ms,
@@ -49,3 +50,13 @@ class CaptureSettings:
             "pdf": self.pdf,
             "har_content": self.har_content,
         }
+
+    def to_storage(self) -> dict:
+        """Kuyrukta/izleyicide saklamak için düz, geri okunabilir biçim."""
+        return asdict(self)
+
+    @classmethod
+    def from_storage(cls, data: dict | None) -> CaptureSettings:
+        """`to_storage` çıktısını geri okur; bilinmeyen alanları yok sayar."""
+        known = {f.name for f in fields(cls)}
+        return cls(**{k: v for k, v in (data or {}).items() if k in known})

@@ -3,17 +3,19 @@
 from __future__ import annotations
 
 import json
+import os
 import tempfile
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from . import __version__
-from .capture import capture as run_capture
 from .config import CaptureSettings, default_data_dir
 from .hashing import MANIFEST_NAME, MANIFEST_SIDECAR, verify_capture
 from .i18n import (
@@ -24,17 +26,29 @@ from .i18n import (
     parse_accept_language,
     translator,
 )
+from .jobs import CaptureQueue
 from .report import default_package_name, export_package, render_report_pdf
-from .storage import Store
+from .storage import JOB_ACTIVE, Store
 
 DATA_DIR = default_data_dir().resolve()
 _BASE = Path(__file__).parent
 _templates = Jinja2Templates(directory=str(_BASE / "web" / "templates"))
 
-app = FastAPI(title="webdamga", version=__version__)
-app.mount("/static", StaticFiles(directory=str(_BASE / "web" / "static")), name="static")
-
 _store = Store(DATA_DIR)
+queue = CaptureQueue(_store, DATA_DIR, concurrency=int(os.environ.get("WEBDAMGA_CONCURRENCY", "1")))
+
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    await queue.start()
+    try:
+        yield
+    finally:
+        await queue.stop()
+
+
+app = FastAPI(title="webdamga", version=__version__, lifespan=lifespan)
+app.mount("/static", StaticFiles(directory=str(_BASE / "web" / "static")), name="static")
 
 _COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
@@ -90,15 +104,33 @@ def _load_manifest(capture_id: str) -> dict:
     return json.loads(manifest_path.read_text(encoding="utf-8"))
 
 
+def _public_job(job: dict) -> dict:
+    """settings_json'ı açılmış hâlde döner."""
+    out = {k: v for k, v in job.items() if k != "settings_json"}
+    out["settings"] = json.loads(job["settings_json"])
+    return out
+
+
+# ------------------------------------------------------------------------ pages
+
+
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, lang: str = Depends(get_lang)) -> HTMLResponse:
-    return _render(request, "index.html", lang, {"captures": _store.list(200)})
+    return _render(
+        request,
+        "index.html",
+        lang,
+        {
+            "captures": _store.list(200),
+            "active_jobs": list(reversed(_store.list_jobs(statuses=JOB_ACTIVE, limit=50))),
+        },
+    )
 
 
 @app.post("/captures")
-async def create_capture(
+def create_capture(
     url: str = Form(...),
-    full_page: bool = Form(True),
+    full_page: bool = Form(False),
     wait_until: str = Form("load"),
     timeout: int = Form(30),
     wait: float = Form(1.5),
@@ -113,14 +145,18 @@ async def create_capture(
         viewport_width=width,
         viewport_height=height,
     )
-    meta = await run_capture(url, DATA_DIR, settings)
-    _store.record(
-        meta,
-        manifest_sha256=meta.get("manifest_sha256"),
-        ok=bool(meta.get("ok")),
-        error=meta.get("error"),
-    )
-    return RedirectResponse(url=f"/captures/{meta['capture_id']}", status_code=303)
+    job = queue.enqueue(url, settings, source="web")
+    return RedirectResponse(url=f"/jobs/{job['id']}", status_code=303)
+
+
+@app.get("/jobs/{job_id}", response_class=HTMLResponse)
+def job_page(request: Request, job_id: str, lang: str = Depends(get_lang)) -> Response:
+    job = _store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    if job["status"] == "done" and job["capture_id"]:
+        return RedirectResponse(url=f"/captures/{job['capture_id']}", status_code=303)
+    return _render(request, "job.html", lang, {"job": job})
 
 
 @app.get("/captures/{capture_id}", response_class=HTMLResponse)
@@ -197,6 +233,19 @@ def capture_file(capture_id: str, name: str) -> FileResponse:
     )
 
 
+# -------------------------------------------------------------------------- API
+
+
+class CaptureRequest(BaseModel):
+    url: str = Field(..., min_length=1)
+    full_page: bool = True
+    wait_until: str = "load"
+    timeout: int = Field(30, ge=5, le=120)
+    wait: float = Field(1.5, ge=0, le=30)
+    width: int = Field(1280, ge=320, le=3840)
+    height: int = Field(800, ge=320, le=4320)
+
+
 @app.get("/api/captures")
 def api_list() -> list[dict]:
     return _store.list(500)
@@ -205,3 +254,39 @@ def api_list() -> list[dict]:
 @app.get("/api/captures/{capture_id}")
 def api_get(capture_id: str) -> dict:
     return _load_meta(capture_id)
+
+
+@app.post("/api/jobs", status_code=202)
+def api_create_job(body: CaptureRequest) -> dict:
+    settings = CaptureSettings(
+        wait_until=body.wait_until,
+        timeout_ms=body.timeout * 1000,
+        extra_wait_ms=int(body.wait * 1000),
+        full_page=body.full_page,
+        viewport_width=body.width,
+        viewport_height=body.height,
+    )
+    return _public_job(queue.enqueue(body.url, settings, source="api"))
+
+
+@app.get("/api/jobs")
+def api_list_jobs(status: str | None = None, limit: int = 50) -> list[dict]:
+    statuses = tuple(s for s in (status or "").split(",") if s) or None
+    return [_public_job(j) for j in _store.list_jobs(statuses=statuses, limit=min(limit, 500))]
+
+
+@app.get("/api/jobs/{job_id}")
+def api_get_job(job_id: str) -> dict:
+    job = _store.get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    return _public_job(job)
+
+
+@app.delete("/api/jobs/{job_id}")
+def api_cancel_job(job_id: str) -> JSONResponse:
+    if _store.get_job(job_id) is None:
+        raise HTTPException(status_code=404, detail="job not found")
+    if not _store.cancel_job(job_id):
+        raise HTTPException(status_code=409, detail="only queued jobs can be cancelled")
+    return JSONResponse(_public_job(_store.get_job(job_id) or {}))

@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}{{ _('web.job.title') }} &middot; webdamga{% endblock %}
+{% block body %}
+<p><a href="/">&larr; {{ _('web.nav.all_captures') }}</a></p>
+
+<section class="card job"
+         id="job"
+         data-id="{{ job.id }}"
+         data-status="{{ job.status }}"
+         data-label-queued="{{ _('web.job.status.queued') }}"
+         data-label-running="{{ _('web.job.status.running') }}"
+         data-label-done="{{ _('web.job.status.done') }}"
+         data-label-failed="{{ _('web.job.status.failed') }}"
+         data-label-cancelled="{{ _('web.job.status.cancelled') }}">
+  <h2>{{ _('web.job.title') }}</h2>
+  <p class="job-url"><code>{{ job.url }}</code></p>
+
+  <p class="job-state">
+    <span class="spinner" id="job-spinner"{% if job.status not in ('queued', 'running') %} hidden{% endif %}></span>
+    <span class="badge status-{{ job.status }}" id="job-status">{{ _('web.job.status.' ~ job.status) }}</span>
+  </p>
+
+  <p class="hint" id="job-hint">{{ _('web.job.hint') }}</p>
+
+  <div class="banner err" id="job-error"{% if not job.error %} hidden{% endif %}>{{ job.error or '' }}</div>
+
+  <p id="job-links">
+    <a id="job-capture" href="{% if job.capture_id %}/captures/{{ job.capture_id }}{% else %}#{% endif %}"
+       {% if not job.capture_id %}hidden{% endif %}>{{ _('web.job.open_capture') }} &rarr;</a>
+  </p>
+
+  <p>
+    <button type="button" class="ghost" id="job-cancel"
+            {% if job.status != 'queued' %}hidden{% endif %}>{{ _('web.job.cancel') }}</button>
+  </p>
+
+  <dl class="job-meta">
+    <dt>{{ _('web.job.id') }}</dt><dd><code>{{ job.id }}</code></dd>
+    <dt>{{ _('web.job.created') }}</dt><dd>{{ job.created_utc }}</dd>
+  </dl>
+</section>
+
+<script>
+(function () {
+  var box = document.getElementById('job');
+  var id = box.dataset.id;
+  var statusEl = document.getElementById('job-status');
+  var spinner = document.getElementById('job-spinner');
+  var errorEl = document.getElementById('job-error');
+  var link = document.getElementById('job-capture');
+  var cancel = document.getElementById('job-cancel');
+  var hint = document.getElementById('job-hint');
+
+  function apply(job) {
+    statusEl.className = 'badge status-' + job.status;
+    statusEl.textContent = box.dataset['label' + job.status.charAt(0).toUpperCase() + job.status.slice(1)] || job.status;
+    var active = job.status === 'queued' || job.status === 'running';
+    spinner.hidden = !active;
+    hint.hidden = !active;
+    cancel.hidden = job.status !== 'queued';
+    if (job.error) { errorEl.textContent = job.error; errorEl.hidden = false; }
+    if (job.capture_id) { link.href = '/captures/' + job.capture_id; link.hidden = false; }
+    if (job.status === 'done' && job.capture_id) {
+      window.location.href = '/captures/' + job.capture_id;
+      return false;
+    }
+    return active;
+  }
+
+  function poll() {
+    fetch('/api/jobs/' + id).then(function (r) { return r.json(); }).then(function (job) {
+      if (apply(job)) { setTimeout(poll, 1500); }
+    }).catch(function () { setTimeout(poll, 4000); });
+  }
+
+  cancel.addEventListener('click', function () {
+    cancel.disabled = true;
+    fetch('/api/jobs/' + id, { method: 'DELETE' })
+      .then(function (r) { return r.json(); })
+      .then(apply)
+      .finally(function () { cancel.disabled = false; });
+  });
+
+  if (box.dataset.status === 'queued' || box.dataset.status === 'running') { poll(); }
+})();
+</script>
+{% endblock %}

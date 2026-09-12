@@ -25,6 +25,28 @@
   </form>
 </section>
 
+<section class="card" id="queue"{% if not active_jobs %} hidden{% endif %}
+         data-label-queued="{{ _('web.job.status.queued') }}"
+         data-label-running="{{ _('web.job.status.running') }}">
+  <h2>{{ _('web.queue.title') }} <span class="dim" id="queue-count">({{ active_jobs|length }})</span></h2>
+  <table class="list">
+    <thead><tr>
+      <th>{{ _('web.col.url') }}</th>
+      <th>{{ _('web.queue.status') }}</th>
+      <th>{{ _('web.queue.created') }}</th>
+    </tr></thead>
+    <tbody id="queue-rows">
+    {% for j in active_jobs %}
+      <tr>
+        <td class="url"><a href="/jobs/{{ j.id }}">{{ j.url }}</a></td>
+        <td><span class="badge status-{{ j.status }}">{{ _('web.job.status.' ~ j.status) }}</span></td>
+        <td class="nowrap">{{ j.created_utc }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+
 <section class="card">
   <h2>{{ _('web.index.captures') }} <span class="dim">({{ captures|length }})</span></h2>
   <table class="list">
@@ -52,10 +74,41 @@
 </section>
 
 <script>
+(function () {
   document.getElementById('capture-form').addEventListener('submit', function () {
     var b = this.querySelector('button');
     b.disabled = true;
     b.textContent = this.dataset.submitting;
   });
+
+  // Kuyrukta iş varken durumu tazele; biri bittiğinde listeyi yenile.
+  var box = document.getElementById('queue');
+  var rows = document.getElementById('queue-rows');
+  var count = document.getElementById('queue-count');
+  var known = rows.children.length;
+  if (!known) { return; }
+
+  function esc(s) {
+    var d = document.createElement('div');
+    d.textContent = s;
+    return d.innerHTML;
+  }
+
+  function poll() {
+    fetch('/api/jobs?status=queued,running').then(function (r) { return r.json(); }).then(function (jobs) {
+      if (jobs.length < known) { window.location.reload(); return; }
+      known = jobs.length;
+      count.textContent = '(' + jobs.length + ')';
+      rows.innerHTML = jobs.reverse().map(function (j) {
+        var label = box.dataset['label' + j.status.charAt(0).toUpperCase() + j.status.slice(1)] || j.status;
+        return '<tr><td class="url"><a href="/jobs/' + j.id + '">' + esc(j.url) + '</a></td>' +
+               '<td><span class="badge status-' + j.status + '">' + esc(label) + '</span></td>' +
+               '<td class="nowrap">' + esc(j.created_utc) + '</td></tr>';
+      }).join('');
+      setTimeout(poll, 2000);
+    }).catch(function () { setTimeout(poll, 5000); });
+  }
+  setTimeout(poll, 2000);
+})();
 </script>
 {% endblock %}
