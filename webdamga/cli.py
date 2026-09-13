@@ -19,6 +19,7 @@ from . import __version__
 from .capture import capture as run_capture
 from .capture import normalize_url
 from .config import CaptureSettings, default_data_dir
+from .diff import compare_captures, describe_reason, diff_dir
 from .hashing import verify_capture
 from .i18n import SUPPORTED_LANGS, detect_lang, normalize_lang, t, tn
 from .network import TOR_PROFILE, ProxyError, load_profiles, redact_proxy
@@ -420,6 +421,57 @@ def sign(
     # Mühürlenmiş manifestoya dokunulmaz; imza yanına ayrı dosya olarak yazılır.
     sig = sign_file(manifest, secret, trusted_comment(capture_id))
     console.print(f"[green]{t('cli.sign.done', lang)}[/] {sig} ({secret.id})")
+
+
+@app.command("diff", help=_h("cli.diff.help"))
+def diff_command(
+    older: str = typer.Argument(..., help=_h("cli.diff.arg.a")),
+    newer: str = typer.Argument(..., help=_h("cli.diff.arg.b")),
+    data_dir: Path | None = _DataDir,
+    as_json: bool = typer.Option(False, "--json", help=_h("cli.diff.opt.json")),
+) -> None:
+    """Compare two captures."""
+    lang = _lang()
+    ddir = _resolve_data_dir(data_dir)
+    dirs = []
+    for capture_id in (older, newer):
+        folder = ddir / "captures" / capture_id
+        if not (folder / "metadata.json").is_file():
+            console.print(f"[red]{t('cli.verify.not_found', lang)}[/] {folder}")
+            raise typer.Exit(1)
+        dirs.append(folder)
+
+    out = diff_dir(ddir, older, newer)
+    result = compare_captures(dirs[0], dirs[1], out)
+    if as_json:
+        print(json.dumps(result, indent=2, ensure_ascii=False))
+        raise typer.Exit()
+
+    colors = {"identical": "green", "minor": "yellow", "major": "red"}
+    verdict = result["verdict"]
+    console.print(f"\n[bold {colors[verdict]}]{t('diff.verdict.' + verdict, lang)}[/]")
+    for reason in result["reasons"]:
+        mark = "[red]![/]" if reason["severity"] == "major" else "[yellow]·[/]"
+        console.print(f"  {mark} {describe_reason(reason, lang)}")
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="dim")
+    table.add_column(overflow="fold")
+    if result["visual"]:
+        table.add_row(t("cli.diff.visual", lang), f"{result['visual']['changed_ratio'] * 100:.2f}%")
+    table.add_row(t("cli.diff.text", lang), f"{result['text']['similarity'] * 100:.1f}%")
+    forms = result["forms"]
+    table.add_row(t("cli.diff.forms", lang), f"{forms['count_a']} → {forms['count_b']}")
+    for form in forms["added"]:
+        table.add_row("", f"[red]+ {form['method'].upper()} {form['action']}[/]")
+    for form in forms["removed"]:
+        table.add_row("", f"[dim]- {form['method'].upper()} {form['action']}[/]")
+    if result["resources"]["hosts_added"]:
+        table.add_row(t("cli.diff.hosts_added", lang), ", ".join(result["resources"]["hosts_added"]))
+    if result["visual"] and result["visual"]["image"]:
+        table.add_row(t("cli.diff.image", lang), str(out / result["visual"]["image"]))
+    console.print()
+    console.print(table)
 
 
 @app.command("timestamp", help=_h("cli.ts.help"))

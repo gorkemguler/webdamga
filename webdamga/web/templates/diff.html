@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}{{ _('web.diff.title') }} &middot; webdamga{% endblock %}
+{% block body %}
+<p><a href="/captures/{{ d.b.capture_id }}">&larr; {{ d.b.capture_id }}</a></p>
+<h2>{{ _('web.diff.title') }}</h2>
+
+<section class="card">
+  <div class="diff-head">
+    <div>
+      <div class="dim">{{ _('web.diff.older') }}</div>
+      <a href="/captures/{{ d.a.capture_id }}"><code>{{ d.a.capture_id }}</code></a>
+      <div class="dim">{{ d.a.completed_at_utc }} &middot; HTTP {{ d.a.http_status or '-' }}</div>
+    </div>
+    <div class="arrow">&rarr;</div>
+    <div>
+      <div class="dim">{{ _('web.diff.newer') }}</div>
+      <a href="/captures/{{ d.b.capture_id }}"><code>{{ d.b.capture_id }}</code></a>
+      <div class="dim">{{ d.b.completed_at_utc }} &middot; HTTP {{ d.b.http_status or '-' }}</div>
+    </div>
+  </div>
+  <p><span class="verdict verdict-{{ d.verdict }}">{{ _('diff.verdict.' ~ d.verdict) }}</span></p>
+  {% if reasons %}
+  <h3>{{ _('web.diff.reasons') }}</h3>
+  <ul class="reasons">
+    {% for r in reasons %}<li class="sev-{{ r.severity }}">{{ r.text }}</li>{% endfor %}
+  </ul>
+  {% endif %}
+</section>
+
+{% if d.visual %}
+<div class="grid diff-shots">
+  <section class="card">
+    <h3>{{ _('web.diff.older') }}</h3>
+    <img class="shot" src="/captures/{{ d.a.capture_id }}/files/screenshot-viewport.png" alt="">
+  </section>
+  <section class="card">
+    <h3>{{ _('web.diff.newer') }}</h3>
+    <img class="shot" src="/captures/{{ d.b.capture_id }}/files/screenshot-viewport.png" alt="">
+  </section>
+</div>
+<section class="card">
+  <h3>{{ _('web.diff.overlay') }} <span class="dim">({{ '%.2f' | format(d.visual.changed_ratio * 100) }}%)</span></h3>
+  <img class="shot" src="/diff/{{ d.a.capture_id }}/{{ d.b.capture_id }}/visual.png" alt="">
+</section>
+{% endif %}
+
+{% if d.metadata %}
+<section class="card">
+  <h3>{{ _('web.diff.metadata') }}</h3>
+  <table class="list">
+    <thead><tr><th>{{ _('web.diff.field') }}</th><th>{{ _('web.diff.older') }}</th><th>{{ _('web.diff.newer') }}</th></tr></thead>
+    <tbody>
+    {% for m in d.metadata %}
+      <tr><td><code>{{ m.field }}</code></td><td class="url">{{ m.a if m.a is not none else '-' }}</td><td class="url">{{ m.b if m.b is not none else '-' }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endif %}
+
+<section class="card">
+  <h3>{{ _('web.diff.forms') }} <span class="dim">({{ d.forms.count_a }} &rarr; {{ d.forms.count_b }})</span></h3>
+  <p class="dim">{{ _('web.diff.password') }}: {{ '✓' if d.forms.password_a else '-' }} &rarr; {{ '✓' if d.forms.password_b else '-' }}</p>
+  {% for label, items, cls in ((_('web.diff.forms_added'), d.forms.added, 'add'), (_('web.diff.forms_removed'), d.forms.removed, 'del')) %}
+    {% for f in items %}
+      <div class="form-change {{ cls }}">
+        <b>{{ label }}</b> <code>{{ f.method | upper }} {{ f.action }}</code>
+        <div class="dim">{% for fld in f.fields %}{{ fld.type }}:{{ fld.name or '?' }}{% if not loop.last %}, {% endif %}{% endfor %}</div>
+      </div>
+    {% endfor %}
+  {% endfor %}
+</section>
+
+{% if d.resources.available %}
+<section class="card">
+  <h3>{{ _('web.diff.resources') }}</h3>
+  <dl class="wide">
+    <dt>{{ _('web.diff.hosts_added') }}</dt><dd>{% for h in d.resources.hosts_added %}<code class="add">{{ h }}</code> {% else %}<span class="dim">{{ _('web.diff.none') }}</span>{% endfor %}</dd>
+    <dt>{{ _('web.diff.hosts_removed') }}</dt><dd>{% for h in d.resources.hosts_removed %}<code>{{ h }}</code> {% else %}<span class="dim">{{ _('web.diff.none') }}</span>{% endfor %}</dd>
+    <dt>{{ _('web.diff.scripts_added') }}</dt><dd>{% for h in d.resources.scripts_added[:30] %}<div><code class="add">{{ h }}</code></div>{% else %}<span class="dim">{{ _('web.diff.none') }}</span>{% endfor %}</dd>
+  </dl>
+</section>
+{% endif %}
+
+<section class="card">
+  <h3>{{ _('web.diff.text') }}</h3>
+  <p class="dim">{{ _('web.diff.text_summary', similarity=('%.1f' | format(d.text.similarity * 100)), added=d.text.added, removed=d.text.removed) }}</p>
+  {% if d.text.diff %}
+  <pre class="textdiff">{% for line in d.text.diff %}<span class="{{ 'add' if line.startswith('+') else 'del' if line.startswith('-') else 'hunk' if line.startswith('@@') else '' }}">{{ line }}</span>
+{% endfor %}</pre>
+  {% if d.text.truncated %}<p class="dim">{{ _('web.diff.text_truncated') }}</p>{% endif %}
+  {% endif %}
+</section>
+{% endblock %}

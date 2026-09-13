@@ -60,6 +60,20 @@
 </section>
 {% endif %}
 
+{% if comparable %}
+<section class="card compare">
+  <form method="get" action="/diff" class="compare-form">
+    <label>{{ _('web.detail.compare') }}
+      <select name="a">
+        {% for c in comparable %}<option value="{{ c.id }}">{{ c.created_utc }} &middot; {{ c.id }}</option>{% endfor %}
+      </select>
+    </label>
+    <input type="hidden" name="b" value="{{ capture_id }}">
+    <button type="submit">{{ _('web.detail.compare_btn') }}</button>
+  </form>
+</section>
+{% endif %}
+
 <section class="card share">
   <h3>{{ _('web.detail.share') }}</h3>
   <p class="hint">{{ _('web.detail.share.hint') }}</p>

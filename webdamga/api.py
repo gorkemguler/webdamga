@@ -7,6 +7,7 @@ import os
 import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse, Response
@@ -17,6 +18,7 @@ from starlette.background import BackgroundTask
 
 from . import __version__
 from .config import CaptureSettings, default_data_dir
+from .diff import compare_captures, describe_reason, diff_dir
 from .hashing import MANIFEST_NAME, MANIFEST_SIDECAR, verify_capture
 from .i18n import (
     DEFAULT_LANG,
@@ -121,6 +123,29 @@ def _checked_route(route: str | None) -> str | None:
     return route
 
 
+def _same_host_captures(capture_id: str, meta: dict) -> list[dict]:
+    """Aynı sunucuya ait diğer yakalamalar, en yeniden eskiye."""
+    host = urlsplit(meta.get("final_url") or meta.get("requested_url") or "").hostname
+    if not host:
+        return []
+    return [
+        row
+        for row in _store.list(500)
+        if row["id"] != capture_id and urlsplit(row["final_url"] or row["requested_url"]).hostname == host
+    ]
+
+
+def _diff(older: str, newer: str) -> tuple[dict, Path]:
+    dir_a, dir_b = _capture_dir(older), _capture_dir(newer)
+    # Kullanıcı hangi sırayla seçerse seçsin "a" eski, "b" yeni olsun.
+    if _load_meta(dir_a.name).get("completed_at_utc", "") > _load_meta(dir_b.name).get(
+        "completed_at_utc", ""
+    ):
+        dir_a, dir_b = dir_b, dir_a
+    out = diff_dir(DATA_DIR, dir_a.name, dir_b.name)
+    return compare_captures(dir_a, dir_b, out), out
+
+
 def _public_job(job: dict) -> dict:
     """settings_json'ı açılmış hâlde döner."""
     out = {k: v for k, v in job.items() if k != "settings_json"}
@@ -194,6 +219,7 @@ def capture_detail(request: Request, capture_id: str, lang: str = Depends(get_la
             "manifest": _load_manifest(capture_id),
             "capture_id": capture_id,
             "timestamps": inspect_timestamps(_capture_dir(capture_id), run_openssl=False),
+            "comparable": _same_host_captures(capture_id, _load_meta(capture_id)),
         },
     )
 
@@ -201,6 +227,29 @@ def capture_detail(request: Request, capture_id: str, lang: str = Depends(get_la
 @app.get("/captures/{capture_id}/verify")
 def capture_verify(capture_id: str) -> dict:
     return verify_capture(_capture_dir(capture_id))
+
+
+@app.get("/diff", response_class=HTMLResponse)
+def diff_page(request: Request, a: str, b: str, lang: str = Depends(get_lang)) -> HTMLResponse:
+    result, _ = _diff(a, b)
+    reasons = [{**r, "text": describe_reason(r, lang)} for r in result["reasons"]]
+    return _render(request, "diff.html", lang, {"d": result, "reasons": reasons, "id_a": a, "id_b": b})
+
+
+@app.get("/diff/{older}/{newer}/visual.png")
+def diff_image(older: str, newer: str) -> FileResponse:
+    _capture_dir(older), _capture_dir(newer)  # kimlikleri doğrula
+    path = diff_dir(DATA_DIR, older, newer) / "visual-diff.png"
+    if not path.is_file():
+        _diff(older, newer)
+    if not path.is_file():
+        raise HTTPException(status_code=404, detail="no screenshots to compare")
+    return FileResponse(str(path), media_type="image/png")
+
+
+@app.get("/api/diff")
+def api_diff(a: str, b: str) -> dict:
+    return _diff(a, b)[0]
 
 
 @app.post("/captures/{capture_id}/timestamp")
