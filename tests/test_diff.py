@@ -241,7 +241,7 @@ def _record(api, folder: Path) -> None:
 
 
 def test_diff_page_orders_captures_by_time(app_client, tmp_path: Path) -> None:
-    http, api = app_client
+    http, _ = app_client
     _capture(tmp_path, "old", completed="2026-01-01T00:00:00Z")
     _capture(tmp_path, "new", html=PHISH, completed="2026-01-02T00:00:00Z")
 
