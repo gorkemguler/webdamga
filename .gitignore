@@ -1,4 +1,4 @@
-# webdamga verisi (yakalamalar + indeks) — repoya girmez
+# webdamga verisi (yakalamalar, karşılaştırmalar, indeks): repoya girmez
 /data/
 *.db
 
