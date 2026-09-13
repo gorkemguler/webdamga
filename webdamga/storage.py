@@ -38,7 +38,28 @@ CREATE TABLE IF NOT EXISTS jobs (
     finished_utc  TEXT
 );
 CREATE INDEX IF NOT EXISTS jobs_status_idx ON jobs (status, created_utc);
+
+CREATE TABLE IF NOT EXISTS monitors (
+    id                INTEGER PRIMARY KEY AUTOINCREMENT,
+    url               TEXT NOT NULL,
+    label             TEXT,
+    interval_minutes  INTEGER NOT NULL,
+    settings_json     TEXT NOT NULL,
+    enabled           INTEGER NOT NULL DEFAULT 1,
+    created_utc       TEXT NOT NULL,
+    next_run_utc      TEXT NOT NULL,
+    last_run_utc      TEXT,
+    last_capture_id   TEXT,           -- son başarılı yakalama, karşılaştırma tabanı
+    last_change_utc   TEXT,
+    last_change_level TEXT            -- minor | major
+);
 """
+
+# Eski veritabanlarına sonradan eklenen sütunlar: (tablo, sütun, tanım)
+_MIGRATIONS = (
+    ("jobs", "change_level", "TEXT"),  # identical | minor | major
+    ("jobs", "compared_to", "TEXT"),  # karşılaştırılan önceki yakalama
+)
 
 JOB_ACTIVE = ("queued", "running")
 MAX_ATTEMPTS = 3
@@ -58,6 +79,10 @@ class Store:
             # Web istekleri ve worker aynı anda yazabildiği için WAL.
             conn.execute("PRAGMA journal_mode=WAL")
             conn.executescript(_SCHEMA)
+            for table, column, kind in _MIGRATIONS:
+                existing = {row["name"] for row in conn.execute(f"PRAGMA table_info({table})")}
+                if column not in existing:
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {kind}")
             conn.commit()
 
     def _conn(self) -> sqlite3.Connection:
@@ -127,12 +152,20 @@ class Store:
             row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
         return dict(row) if row else None
 
-    def list_jobs(self, *, statuses: tuple[str, ...] | None = None, limit: int = 50) -> list[dict]:
+    def list_jobs(
+        self, *, statuses: tuple[str, ...] | None = None, monitor_id: int | None = None, limit: int = 50
+    ) -> list[dict]:
         query = "SELECT * FROM jobs"
+        clauses: list[str] = []
         params: list = []
         if statuses:
-            query += f" WHERE status IN ({','.join('?' * len(statuses))})"
+            clauses.append(f"status IN ({','.join('?' * len(statuses))})")
             params.extend(statuses)
+        if monitor_id is not None:
+            clauses.append("monitor_id = ?")
+            params.append(monitor_id)
+        if clauses:
+            query += " WHERE " + " AND ".join(clauses)
         query += " ORDER BY created_utc DESC, rowid DESC LIMIT ?"
         params.append(limit)
         with closing(self._conn()) as conn:
@@ -199,3 +232,89 @@ class Store:
             ).rowcount
             conn.commit()
         return requeued, failed
+
+    def set_job_change(self, job_id: str, level: str, compared_to: str) -> None:
+        with closing(self._conn()) as conn:
+            conn.execute(
+                "UPDATE jobs SET change_level = ?, compared_to = ? WHERE id = ?", (level, compared_to, job_id)
+            )
+            conn.commit()
+
+    # ------------------------------------------------------------------ monitors
+
+    def create_monitor(
+        self, url: str, interval_minutes: int, settings_json: str, *, label: str | None = None
+    ) -> dict:
+        now = now_iso()
+        with closing(self._conn()) as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO monitors (url, label, interval_minutes, settings_json, created_utc, next_run_utc)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (url, label, interval_minutes, settings_json, now, now),  # ilk tur hemen
+            )
+            conn.commit()
+            monitor_id = cur.lastrowid
+        monitor = self.get_monitor(monitor_id)
+        assert monitor is not None
+        return monitor
+
+    def get_monitor(self, monitor_id: int) -> dict | None:
+        with closing(self._conn()) as conn:
+            row = conn.execute("SELECT * FROM monitors WHERE id = ?", (monitor_id,)).fetchone()
+        return dict(row) if row else None
+
+    def list_monitors(self) -> list[dict]:
+        with closing(self._conn()) as conn:
+            rows = conn.execute("SELECT * FROM monitors ORDER BY created_utc DESC, id DESC").fetchall()
+        return [dict(row) for row in rows]
+
+    _MONITOR_FIELDS = frozenset(
+        {
+            "enabled",
+            "interval_minutes",
+            "label",
+            "next_run_utc",
+            "last_run_utc",
+            "last_capture_id",
+            "last_change_utc",
+            "last_change_level",
+        }
+    )
+
+    def update_monitor(self, monitor_id: int, **fields: object) -> dict | None:
+        unknown = set(fields) - self._MONITOR_FIELDS
+        if unknown:
+            raise ValueError(f"unknown monitor fields: {sorted(unknown)}")
+        if fields:
+            assignments = ", ".join(f"{name} = ?" for name in fields)
+            with closing(self._conn()) as conn:
+                conn.execute(
+                    f"UPDATE monitors SET {assignments} WHERE id = ?", (*fields.values(), monitor_id)
+                )
+                conn.commit()
+        return self.get_monitor(monitor_id)
+
+    def delete_monitor(self, monitor_id: int) -> bool:
+        with closing(self._conn()) as conn:
+            cur = conn.execute("DELETE FROM monitors WHERE id = ?", (monitor_id,))
+            conn.commit()
+        return cur.rowcount == 1
+
+    def due_monitors(self, now: str) -> list[dict]:
+        """Zamanı gelmiş, açık ve hâlihazırda kuyrukta işi olmayan izleyiciler."""
+        with closing(self._conn()) as conn:
+            rows = conn.execute(
+                """
+                SELECT m.* FROM monitors m
+                WHERE m.enabled = 1 AND m.next_run_utc <= ?
+                  AND NOT EXISTS (
+                      SELECT 1 FROM jobs j
+                      WHERE j.monitor_id = m.id AND j.status IN ('queued', 'running')
+                  )
+                ORDER BY m.next_run_utc
+                """,
+                (now,),
+            ).fetchall()
+        return [dict(row) for row in rows]

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}{{ monitor.label or monitor.url }} &middot; webdamga{% endblock %}
+{% block body %}
+<p><a href="/monitors">&larr; {{ _('web.monitors.title') }}</a></p>
+<h2>{{ monitor.label or _('web.monitors.monitor') }}</h2>
+
+<section class="card">
+  <dl>
+    <dt>{{ _('web.col.url') }}</dt><dd><code>{{ monitor.url }}</code></dd>
+    <dt>{{ _('web.monitors.every') }}</dt><dd>{{ _('web.monitors.minutes', count=monitor.interval_minutes) }}</dd>
+    <dt>{{ _('web.monitors.state') }}</dt><dd>{% if monitor.enabled %}{{ _('web.monitors.active') }}{% else %}<span class="badge status-cancelled">{{ _('web.monitors.paused') }}</span>{% endif %}</dd>
+    <dt>{{ _('web.monitors.next_run') }}</dt><dd>{{ monitor.next_run_utc if monitor.enabled else '-' }}</dd>
+    <dt>{{ _('web.monitors.last_run') }}</dt><dd>{{ monitor.last_run_utc or '-' }}</dd>
+    <dt>{{ _('web.monitors.baseline') }}</dt><dd>{% if monitor.last_capture_id %}<a href="/captures/{{ monitor.last_capture_id }}"><code>{{ monitor.last_capture_id }}</code></a>{% else %}-{% endif %}</dd>
+  </dl>
+  <div class="monitor-actions">
+    <form method="post" action="/monitors/{{ monitor.id }}/run" class="inline"><button>{{ _('web.monitors.run_now') }}</button></form>
+    {% if monitor.enabled %}
+    <form method="post" action="/monitors/{{ monitor.id }}/pause" class="inline"><button class="ghost">{{ _('web.monitors.pause') }}</button></form>
+    {% else %}
+    <form method="post" action="/monitors/{{ monitor.id }}/resume" class="inline"><button class="ghost">{{ _('web.monitors.resume') }}</button></form>
+    {% endif %}
+    <form method="post" action="/monitors/{{ monitor.id }}/delete" class="inline"
+          onsubmit="return confirm({{ _('web.monitors.delete_confirm') | tojson }})"><button class="ghost danger">{{ _('web.monitors.delete') }}</button></form>
+  </div>
+  <p class="hint">{{ _('web.monitors.delete_hint') }}</p>
+</section>
+
+<section class="card">
+  <h3>{{ _('web.monitors.runs') }}</h3>
+  <table class="list">
+    <thead><tr>
+      <th>{{ _('web.queue.created') }}</th>
+      <th>{{ _('web.queue.status') }}</th>
+      <th>{{ _('web.monitors.change') }}</th>
+      <th>{{ _('web.col.id') }}</th>
+    </tr></thead>
+    <tbody>
+    {% for r in runs %}
+      <tr>
+        <td class="nowrap">{{ r.created_utc }}</td>
+        <td><span class="badge status-{{ r.status }}">{{ _('web.job.status.' ~ r.status) }}</span>{% if r.error %}<div class="dim small-text">{{ r.error[:120] }}</div>{% endif %}</td>
+        <td>
+          {% if r.change_level %}
+            <a href="/diff?a={{ r.compared_to }}&b={{ r.capture_id }}"><span class="verdict verdict-{{ r.change_level }} small">{{ _('diff.verdict.' ~ r.change_level) }}</span></a>
+          {% elif r.status == 'done' %}<span class="dim">{{ _('web.monitors.first_run') }}</span>{% else %}-{% endif %}
+        </td>
+        <td>{% if r.capture_id %}<a href="/captures/{{ r.capture_id }}"><code>{{ r.capture_id }}</code></a>{% else %}<a href="/jobs/{{ r.id }}">{{ r.id }}</a>{% endif %}</td>
+      </tr>
+    {% else %}
+      <tr><td colspan="4" class="dim">{{ _('web.monitors.no_runs') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

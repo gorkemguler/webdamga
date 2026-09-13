@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}{{ _('web.monitors.title') }} &middot; webdamga{% endblock %}
+{% block body %}
+<section class="card">
+  <h2>{{ _('web.monitors.new') }}</h2>
+  <p class="hint">{{ _('web.monitors.intro') }}</p>
+  <form method="post" action="/monitors" class="capture-form">
+    <input type="url" name="url" placeholder="{{ _('web.index.url_placeholder') }}" required autocomplete="off">
+    <div class="opts">
+      <label>{{ _('web.monitors.label') }}<input type="text" name="label" maxlength="80"></label>
+      <label>{{ _('web.monitors.every') }}
+        <select name="interval">
+          {% for minutes in (15, 30, 60, 180, 360, 720, 1440) %}
+          <option value="{{ minutes }}"{% if minutes == 60 %} selected{% endif %}>{{ _('web.monitors.interval.' ~ minutes) }}</option>
+          {% endfor %}
+        </select>
+      </label>
+      <label>{{ _('web.index.route') }}
+        <select name="route">
+          <option value="" selected>{{ _('web.index.route.direct') }}</option>
+          {% for r in routes %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
+        </select>
+      </label>
+      <label class="chk" title="{{ _('web.detail.timestamp_hint') }}"><input type="checkbox" name="timestamp" value="true"> {{ _('web.index.timestamp') }}</label>
+    </div>
+    <button type="submit">{{ _('web.monitors.add') }}</button>
+  </form>
+</section>
+
+<section class="card">
+  <h2>{{ _('web.monitors.title') }} <span class="dim">({{ monitors|length }})</span></h2>
+  <table class="list">
+    <thead><tr>
+      <th>{{ _('web.col.url') }}</th>
+      <th>{{ _('web.monitors.every') }}</th>
+      <th>{{ _('web.monitors.last_change') }}</th>
+      <th>{{ _('web.monitors.next_run') }}</th>
+      <th></th>
+    </tr></thead>
+    <tbody>
+    {% for m in monitors %}
+      <tr class="{{ '' if m.enabled else 'paused' }}">
+        <td class="url"><a href="/monitors/{{ m.id }}">{{ m.label or m.url }}</a>{% if m.label %}<div class="dim">{{ m.url }}</div>{% endif %}</td>
+        <td class="nowrap">{{ _('web.monitors.minutes', count=m.interval_minutes) }}</td>
+        <td>{% if m.last_change_level %}<span class="verdict verdict-{{ m.last_change_level }} small">{{ _('diff.verdict.' ~ m.last_change_level) }}</span><div class="dim">{{ m.last_change_utc }}</div>{% else %}<span class="dim">{{ _('web.monitors.no_change') }}</span>{% endif %}</td>
+        <td class="nowrap">{% if m.enabled %}{{ m.next_run_utc }}{% else %}<span class="badge status-cancelled">{{ _('web.monitors.paused') }}</span>{% endif %}</td>
+        <td class="nowrap">
+          <form method="post" action="/monitors/{{ m.id }}/run" class="inline"><button class="ghost small">{{ _('web.monitors.run_now') }}</button></form>
+        </td>
+      </tr>
+    {% else %}
+      <tr><td colspan="5" class="dim">{{ _('web.monitors.empty') }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</section>
+{% endblock %}

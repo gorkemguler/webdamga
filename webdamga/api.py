@@ -29,6 +29,7 @@ from .i18n import (
     translator,
 )
 from .jobs import CaptureQueue
+from .monitor import MonitorError, Scheduler, add_monitor, validate_interval
 from .network import ProxyError, load_profiles
 from .report import default_package_name, export_package, render_report_pdf
 from .storage import JOB_ACTIVE, Store
@@ -40,14 +41,17 @@ _templates = Jinja2Templates(directory=str(_BASE / "web" / "templates"))
 
 _store = Store(DATA_DIR)
 queue = CaptureQueue(_store, DATA_DIR, concurrency=int(os.environ.get("WEBDAMGA_CONCURRENCY", "1")))
+scheduler = Scheduler(_store, queue)
 
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
     await queue.start()
+    await scheduler.start()
     try:
         yield
     finally:
+        await scheduler.stop()
         await queue.stop()
 
 
@@ -198,6 +202,65 @@ def create_capture(
     return RedirectResponse(url=f"/jobs/{job['id']}", status_code=303)
 
 
+def _monitor_or_404(monitor_id: int) -> dict:
+    monitor = _store.get_monitor(monitor_id)
+    if monitor is None:
+        raise HTTPException(status_code=404, detail="monitor not found")
+    return monitor
+
+
+def _public_monitor(monitor: dict) -> dict:
+    out = {k: v for k, v in monitor.items() if k != "settings_json"}
+    out["enabled"] = bool(monitor["enabled"])
+    out["settings"] = json.loads(monitor["settings_json"])
+    return out
+
+
+@app.get("/monitors", response_class=HTMLResponse)
+def monitors_page(request: Request, lang: str = Depends(get_lang)) -> HTMLResponse:
+    return _render(
+        request, "monitors.html", lang, {"monitors": _store.list_monitors(), "routes": _route_names()}
+    )
+
+
+@app.post("/monitors")
+def create_monitor_form(
+    url: str = Form(...),
+    interval: int = Form(60),
+    label: str = Form(""),
+    route: str = Form(""),
+    timestamp: bool = Form(False),
+) -> RedirectResponse:
+    settings = CaptureSettings(proxy_profile=_checked_route(route), timestamp=timestamp)
+    try:
+        monitor = add_monitor(_store, url, interval, settings, label=label)
+    except MonitorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+    return RedirectResponse(url=f"/monitors/{monitor['id']}", status_code=303)
+
+
+@app.get("/monitors/{monitor_id}", response_class=HTMLResponse)
+def monitor_page(request: Request, monitor_id: int, lang: str = Depends(get_lang)) -> HTMLResponse:
+    monitor = _monitor_or_404(monitor_id)
+    runs = _store.list_jobs(monitor_id=monitor_id, limit=100)
+    return _render(request, "monitor.html", lang, {"monitor": monitor, "runs": runs})
+
+
+@app.post("/monitors/{monitor_id}/{action}")
+def monitor_action_form(monitor_id: int, action: str) -> RedirectResponse:
+    monitor = _monitor_or_404(monitor_id)
+    if action == "run":
+        scheduler.run_now(monitor)
+    elif action in ("pause", "resume"):
+        _store.update_monitor(monitor_id, enabled=int(action == "resume"))
+    elif action == "delete":
+        _store.delete_monitor(monitor_id)
+        return RedirectResponse(url="/monitors", status_code=303)
+    else:
+        raise HTTPException(status_code=404)
+    return RedirectResponse(url=f"/monitors/{monitor_id}", status_code=303)
+
+
 @app.get("/jobs/{job_id}", response_class=HTMLResponse)
 def job_page(request: Request, job_id: str, lang: str = Depends(get_lang)) -> Response:
     job = _store.get_job(job_id)
@@ -346,6 +409,74 @@ def api_list() -> list[dict]:
 @app.get("/api/captures/{capture_id}")
 def api_get(capture_id: str) -> dict:
     return _load_meta(capture_id)
+
+
+class MonitorRequest(BaseModel):
+    url: str = Field(..., min_length=1)
+    interval_minutes: int = Field(60)
+    label: str | None = None
+    route: str | None = None
+    timestamp: bool = False
+    full_page: bool = True
+
+
+class MonitorPatch(BaseModel):
+    enabled: bool | None = None
+    interval_minutes: int | None = None
+    label: str | None = None
+
+
+@app.get("/api/monitors")
+def api_list_monitors() -> list[dict]:
+    return [_public_monitor(m) for m in _store.list_monitors()]
+
+
+@app.post("/api/monitors", status_code=201)
+def api_create_monitor(body: MonitorRequest) -> dict:
+    settings = CaptureSettings(
+        proxy_profile=_checked_route(body.route), timestamp=body.timestamp, full_page=body.full_page
+    )
+    try:
+        return _public_monitor(
+            add_monitor(_store, body.url, body.interval_minutes, settings, label=body.label)
+        )
+    except MonitorError as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
+
+@app.get("/api/monitors/{monitor_id}")
+def api_get_monitor(monitor_id: int) -> dict:
+    monitor = _public_monitor(_monitor_or_404(monitor_id))
+    monitor["runs"] = [_public_job(j) for j in _store.list_jobs(monitor_id=monitor_id, limit=100)]
+    return monitor
+
+
+@app.patch("/api/monitors/{monitor_id}")
+def api_update_monitor(monitor_id: int, body: MonitorPatch) -> dict:
+    _monitor_or_404(monitor_id)
+    fields: dict = {}
+    if body.enabled is not None:
+        fields["enabled"] = int(body.enabled)
+    if body.interval_minutes is not None:
+        try:
+            fields["interval_minutes"] = validate_interval(body.interval_minutes)
+        except MonitorError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+    if body.label is not None:
+        fields["label"] = body.label.strip() or None
+    return _public_monitor(_store.update_monitor(monitor_id, **fields) or {})
+
+
+@app.delete("/api/monitors/{monitor_id}", status_code=204)
+def api_delete_monitor(monitor_id: int) -> Response:
+    _monitor_or_404(monitor_id)
+    _store.delete_monitor(monitor_id)
+    return Response(status_code=204)
+
+
+@app.post("/api/monitors/{monitor_id}/run", status_code=202)
+def api_run_monitor(monitor_id: int) -> dict:
+    return _public_job(scheduler.run_now(_monitor_or_404(monitor_id)))
 
 
 @app.post("/api/jobs", status_code=202)

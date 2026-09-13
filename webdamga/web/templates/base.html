@@ -10,6 +10,10 @@
   <header>
     <a href="/" class="brand">web<span>damga</span></a>
     <span class="tag">{{ _('web.tagline') }} &middot; v{{ version }}</span>
+    <nav class="mainnav">
+      <a href="/">{{ _('web.nav.captures') }}</a>
+      <a href="/monitors">{{ _('web.nav.monitors') }}</a>
+    </nav>
     <nav class="langs">
       {% for code in langs %}
         <a href="?lang={{ code }}"

@@ -195,3 +195,14 @@ pre.textdiff { background: var(--bg); padding: 10px; border-radius: 6px; overflo
 pre.textdiff .add { color: var(--ok); }
 pre.textdiff .del { color: var(--err); }
 pre.textdiff .hunk { color: var(--dim); }
+
+/* --- izleme --- */
+.mainnav { display: flex; gap: 14px; margin-left: 18px; font-size: 13px; }
+.mainnav a { color: var(--dim); text-decoration: none; }
+.mainnav a:hover { color: var(--fg); }
+form.inline { display: inline; margin: 0; }
+.monitor-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 16px; }
+button.danger { color: var(--err); border-color: rgba(255, 107, 107, .4); }
+.verdict.small { padding: 1px 7px; font-size: 11px; }
+tr.paused td { opacity: .6; }
+.small-text { font-size: 11px; }

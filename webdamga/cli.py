@@ -8,6 +8,7 @@ ayrıca `webdamga --lang tr ...` ile değiştirilebilir.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from pathlib import Path
 
@@ -22,6 +23,8 @@ from .config import CaptureSettings, default_data_dir
 from .diff import compare_captures, describe_reason, diff_dir
 from .hashing import verify_capture
 from .i18n import SUPPORTED_LANGS, detect_lang, normalize_lang, t, tn
+from .jobs import CaptureQueue
+from .monitor import MonitorError, Scheduler, add_monitor
 from .network import TOR_PROFILE, ProxyError, load_profiles, redact_proxy
 from .report import default_package_name, export_package
 from .seal import SIGNATURE_NAME, trusted_comment
@@ -585,6 +588,133 @@ def serve(
 def version() -> None:
     """Print the version."""
     console.print(f"webdamga {__version__}")
+
+
+monitor_app = typer.Typer(help=_h("cli.monitor.help"), no_args_is_help=True)
+app.add_typer(monitor_app, name="monitor")
+
+
+def _get_monitor_or_exit(store: Store, monitor_id: int, lang: str) -> dict:
+    monitor = store.get_monitor(monitor_id)
+    if monitor is None:
+        console.print(f"[red]{t('cli.monitor.not_found', lang, id=monitor_id)}[/]")
+        raise typer.Exit(1)
+    return monitor
+
+
+@monitor_app.command("add", help=_h("cli.monitor.add.help"))
+def monitor_add(
+    url: str = typer.Argument(..., help=_h("cli.capture.arg.url")),
+    every: int = typer.Option(60, "--every", "-e", help=_h("cli.monitor.opt.every")),
+    label: str | None = typer.Option(None, "--label", help=_h("cli.monitor.opt.label")),
+    via: str | None = typer.Option(None, "--via", help=_h("cli.capture.opt.via")),
+    tor: bool = typer.Option(False, "--tor", help=_h("cli.capture.opt.tor")),
+    timestamp: bool = typer.Option(False, "--timestamp", help=_h("cli.capture.opt.timestamp")),
+    data_dir: Path | None = _DataDir,
+) -> None:
+    """Start watching a URL."""
+    lang = _lang()
+    if tor and via:
+        console.print(f"[red]{t('cli.capture.route_conflict', lang)}[/]")
+        raise typer.Exit(2)
+    store = Store(_resolve_data_dir(data_dir))
+    settings = CaptureSettings(proxy_profile=TOR_PROFILE if tor else via, timestamp=timestamp)
+    try:
+        monitor = add_monitor(store, url, every, settings, label=label)
+    except MonitorError as exc:
+        console.print(f"[red]{exc}[/]")
+        raise typer.Exit(2) from exc
+    console.print(
+        f"[green]{t('cli.monitor.added', lang, id=monitor['id'], url=monitor['url'], minutes=every)}[/]"
+    )
+
+
+@monitor_app.command("list", help=_h("cli.monitor.list.help"))
+def monitor_list(data_dir: Path | None = _DataDir) -> None:
+    """List monitors."""
+    lang = _lang()
+    monitors = Store(_resolve_data_dir(data_dir)).list_monitors()
+    if not monitors:
+        console.print(f"[dim]{t('cli.monitor.empty', lang)}[/]")
+        raise typer.Exit()
+    colors = {"minor": "yellow", "major": "red"}
+    table = Table()
+    table.add_column("#", style="cyan", justify="right")
+    table.add_column(t("cli.col.url", lang), overflow="fold")
+    table.add_column(t("cli.col.every", lang), justify="right")
+    table.add_column(t("cli.col.last_change", lang))
+    table.add_column(t("cli.col.next_run", lang), no_wrap=True)
+    for m in monitors:
+        level = m["last_change_level"]
+        change = (
+            f"[{colors[level]}]{t('diff.verdict.' + level, lang)}[/] {m['last_change_utc']}" if level else "-"
+        )
+        table.add_row(
+            str(m["id"]),
+            m["label"] or m["url"],
+            f"{m['interval_minutes']}m",
+            change,
+            m["next_run_utc"] if m["enabled"] else f"[dim]{t('web.monitors.paused', lang)}[/]",
+        )
+    console.print(table)
+
+
+def _set_enabled(monitor_id: int, enabled: bool, data_dir: Path | None) -> None:
+    lang = _lang()
+    store = Store(_resolve_data_dir(data_dir))
+    _get_monitor_or_exit(store, monitor_id, lang)
+    store.update_monitor(monitor_id, enabled=int(enabled))
+    console.print(t("cli.monitor.done", lang))
+
+
+@monitor_app.command("pause", help=_h("cli.monitor.pause.help"))
+def monitor_pause(
+    monitor_id: int = typer.Argument(..., help=_h("cli.monitor.arg.id")), data_dir: Path | None = _DataDir
+) -> None:
+    _set_enabled(monitor_id, False, data_dir)
+
+
+@monitor_app.command("resume", help=_h("cli.monitor.resume.help"))
+def monitor_resume(
+    monitor_id: int = typer.Argument(..., help=_h("cli.monitor.arg.id")), data_dir: Path | None = _DataDir
+) -> None:
+    _set_enabled(monitor_id, True, data_dir)
+
+
+@monitor_app.command("remove", help=_h("cli.monitor.remove.help"))
+def monitor_remove(
+    monitor_id: int = typer.Argument(..., help=_h("cli.monitor.arg.id")), data_dir: Path | None = _DataDir
+) -> None:
+    lang = _lang()
+    store = Store(_resolve_data_dir(data_dir))
+    _get_monitor_or_exit(store, monitor_id, lang)
+    store.delete_monitor(monitor_id)
+    console.print(t("cli.monitor.done", lang))
+
+
+@monitor_app.command("run", help=_h("cli.monitor.run.help"))
+def monitor_run(data_dir: Path | None = _DataDir) -> None:
+    """Run the scheduler in the foreground."""
+    import os
+
+    lang = _lang()
+    ddir = _resolve_data_dir(data_dir)
+    store = Store(ddir)
+
+    async def forever() -> None:
+        queue = CaptureQueue(store, ddir, concurrency=int(os.environ.get("WEBDAMGA_CONCURRENCY", "1")))
+        scheduler = Scheduler(store, queue)
+        await queue.start()
+        await scheduler.start()
+        console.print(t("cli.monitor.running", lang, count=len(store.list_monitors())))
+        try:
+            await asyncio.Event().wait()
+        finally:
+            await scheduler.stop()
+            await queue.stop()
+
+    with contextlib.suppress(KeyboardInterrupt):
+        asyncio.run(forever())
 
 
 def main() -> None:
