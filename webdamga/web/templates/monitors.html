@@ -4,6 +4,10 @@
 <section class="card">
   <h2>{{ _('web.monitors.new') }}</h2>
   <p class="hint">{{ _('web.monitors.intro') }}</p>
+  <p class="hint">{{ _('web.monitors.notify') }}:
+    {% if notify_channels %}<span style="color:var(--ok)">{{ _('web.monitors.notify.on', channels=notify_channels|join(', ')) }}</span>
+    {% else %}<span class="dim">{{ _('web.monitors.notify.off') }}</span>{% endif %}
+  </p>
   <form method="post" action="/monitors" class="capture-form">
     <input type="url" name="url" placeholder="{{ _('web.index.url_placeholder') }}" required autocomplete="off">
     <div class="opts">

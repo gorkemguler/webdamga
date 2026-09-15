@@ -21,12 +21,14 @@ import asyncio
 import contextlib
 import json
 import logging
+import os
 from datetime import UTC, datetime, timedelta
 
 from .capture import normalize_url
 from .config import CaptureSettings
-from .diff import compare_captures, diff_dir
+from .diff import compare_captures, describe_reason, diff_dir
 from .jobs import CaptureQueue
+from .notify import ChangeEvent, configured_channels, dispatch, should_notify
 from .storage import Store, now_iso
 
 log = logging.getLogger("webdamga.monitor")
@@ -146,6 +148,31 @@ class Scheduler:
             level = result["verdict"]
             self.store.set_job_change(job["id"], level, previous)
             if level != "identical":
-                self.store.update_monitor(monitor["id"], last_change_utc=now_iso(), last_change_level=level)
+                changed_at = now_iso()
+                self.store.update_monitor(monitor["id"], last_change_utc=changed_at, last_change_level=level)
                 log.info("monitor %s: %s change (%s -> %s)", monitor["id"], level, previous, new_id)
+                self._notify_change(monitor, result, previous, new_id, changed_at)
         self.store.update_monitor(monitor["id"], last_capture_id=new_id)
+
+    def _notify_change(
+        self, monitor: dict, result: dict, previous: str, new_id: str, changed_at: str
+    ) -> None:
+        """Eşiği geçen değişikliği yapılandırılmış kanallara bildirir (hata yakalamayı bozmaz)."""
+        level = result["verdict"]
+        if not (configured_channels() and should_notify(level)):
+            return
+        lang = os.environ.get("WEBDAMGA_LANG", "en")
+        event = ChangeEvent(
+            monitor_id=monitor["id"],
+            label=monitor.get("label"),
+            url=monitor["url"],
+            level=level,
+            previous_id=previous,
+            capture_id=new_id,
+            reasons=[describe_reason(r, lang) for r in result.get("reasons", [])],
+            detected_utc=changed_at,
+        )
+        try:
+            dispatch(event)
+        except Exception:
+            log.exception("notification dispatch failed for monitor %s", monitor["id"])

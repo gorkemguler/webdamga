@@ -274,8 +274,17 @@ def _public_monitor(monitor: dict) -> dict:
 
 @app.get("/monitors", response_class=HTMLResponse)
 def monitors_page(request: Request, lang: str = Depends(get_lang)) -> HTMLResponse:
+    from .notify import configured_channels
+
     return _render(
-        request, "monitors.html", lang, {"monitors": _store.list_monitors(), "routes": _route_names()}
+        request,
+        "monitors.html",
+        lang,
+        {
+            "monitors": _store.list_monitors(),
+            "routes": _route_names(),
+            "notify_channels": configured_channels(),
+        },
     )
 
 

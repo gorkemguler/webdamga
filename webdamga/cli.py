@@ -807,6 +807,34 @@ def monitor_run(data_dir: Path | None = _DataDir) -> None:
         asyncio.run(forever())
 
 
+@monitor_app.command("notify-test", help=_h("cli.notify.help"))
+def monitor_notify_test() -> None:
+    """Send a sample change notification to the configured channels."""
+    from .notify import ChangeEvent, configured_channels, dispatch
+
+    lang = _lang()
+    channels = configured_channels()
+    if not channels:
+        console.print(f"[yellow]{t('cli.notify.none', lang)}[/]")
+        raise typer.Exit(1)
+    event = ChangeEvent(
+        monitor_id=0,
+        label="webdamga notify-test",
+        url="https://example.com/",
+        level="major",
+        previous_id="PREVIOUS",
+        capture_id="CURRENT",
+        reasons=[t("cli.notify.sample_reason", lang)],
+        detected_utc="2026-01-01T00:00:00Z",
+    )
+    results = dispatch(event)
+    for channel, ok in results.items():
+        mark = "[green]✓[/]" if ok else "[red]✗[/]"
+        console.print(f"  {mark} {channel}")
+    if not all(results.values()):
+        raise typer.Exit(2)
+
+
 def main() -> None:
     app()
 
