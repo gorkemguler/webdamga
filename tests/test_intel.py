@@ -31,7 +31,10 @@ DOMAIN_RDAP = {
                     "roles": ["abuse"],
                     "vcardArray": [
                         "vcard",
-                        [["fn", {}, "text", "MarkMonitor Abuse"], ["email", {}, "text", "abuse@markmonitor.com"]],
+                        [
+                            ["fn", {}, "text", "MarkMonitor Abuse"],
+                            ["email", {}, "text", "abuse@markmonitor.com"],
+                        ],
                     ],
                 }
             ],
@@ -232,7 +235,9 @@ def client(tmp_path: Path, monkeypatch: pytest.MonkeyPatch):
     # api kendi intel modülünü import ediyor; onu da taklit edelim.
     import webdamga.intel as api_intel
 
-    monkeypatch.setattr(api_intel, "_rdap", lambda path: DOMAIN_RDAP if path.startswith("domain/") else IP_RDAP)
+    monkeypatch.setattr(
+        api_intel, "_rdap", lambda path: DOMAIN_RDAP if path.startswith("domain/") else IP_RDAP
+    )
     monkeypatch.setattr(
         api_intel, "asn_intel", lambda ip: {"asn": "36459", "org": "GITHUB - GitHub, Inc., US"}
     )

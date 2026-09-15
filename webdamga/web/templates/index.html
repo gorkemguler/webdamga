@@ -65,7 +65,14 @@
 </section>
 
 <section class="card">
-  <h2>{{ _('web.index.captures') }} <span class="dim">({{ captures|length }})</span></h2>
+  <div class="captures-head">
+    <h2>{{ _('web.index.captures') }} <span class="dim">({{ total }})</span></h2>
+    <form method="get" action="/" class="search">
+      <input type="search" name="q" value="{{ query }}" placeholder="{{ _('web.index.search_placeholder') }}" autocomplete="off">
+      <button type="submit">{{ _('web.index.search') }}</button>
+      {% if query %}<a class="clear" href="/">{{ _('web.index.clear') }}</a>{% endif %}
+    </form>
+  </div>
   <table class="list">
     <thead><tr>
       <th>{{ _('web.col.id') }}</th>
@@ -84,10 +91,18 @@
         <td>{% if not c.ok %}<span class="badge err">{{ _('web.badge.error') }}</span>{% endif %}</td>
       </tr>
     {% else %}
-      <tr><td colspan="5" class="dim">{{ _('web.index.empty') }}</td></tr>
+      <tr><td colspan="5" class="dim">{{ _('web.index.no_match') if query else _('web.index.empty') }}</td></tr>
     {% endfor %}
     </tbody>
   </table>
+  {% if has_prev or has_next %}
+  <nav class="pager">
+    {% set qs = ('&q=' ~ query) if query else '' %}
+    {% if has_prev %}<a href="/?page={{ page - 1 }}{{ qs }}">&larr; {{ _('web.index.prev') }}</a>{% else %}<span class="dim">&larr; {{ _('web.index.prev') }}</span>{% endif %}
+    <span class="dim">{{ _('web.index.page_of', page=page, total=((total - 1) // page_size + 1)) }}</span>
+    {% if has_next %}<a href="/?page={{ page + 1 }}{{ qs }}">{{ _('web.index.next') }} &rarr;</a>{% else %}<span class="dim">{{ _('web.index.next') }} &rarr;</span>{% endif %}
+  </nav>
+  {% endif %}
 </section>
 
 <script>

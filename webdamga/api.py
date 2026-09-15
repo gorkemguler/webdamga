@@ -196,14 +196,25 @@ def _public_job(job: dict) -> dict:
 # ------------------------------------------------------------------------ pages
 
 
+PAGE_SIZE = 50
+
+
 @app.get("/", response_class=HTMLResponse)
-def index(request: Request, lang: str = Depends(get_lang)) -> HTMLResponse:
+def index(request: Request, q: str = "", page: int = 1, lang: str = Depends(get_lang)) -> HTMLResponse:
+    page = max(1, page)
+    captures, total = _store.search_captures(query=q, limit=PAGE_SIZE, offset=(page - 1) * PAGE_SIZE)
     return _render(
         request,
         "index.html",
         lang,
         {
-            "captures": _store.list(200),
+            "captures": captures,
+            "total": total,
+            "query": q,
+            "page": page,
+            "page_size": PAGE_SIZE,
+            "has_prev": page > 1,
+            "has_next": page * PAGE_SIZE < total,
             "active_jobs": list(reversed(_store.list_jobs(statuses=JOB_ACTIVE, limit=50))),
             "routes": _route_names(),
             "devices": _featured_devices(),
@@ -484,8 +495,9 @@ class CaptureRequest(BaseModel):
 
 
 @app.get("/api/captures")
-def api_list() -> list[dict]:
-    return _store.list(500)
+def api_list(q: str = "", limit: int = 50, offset: int = 0) -> dict:
+    captures, total = _store.search_captures(query=q, limit=min(max(1, limit), 500), offset=offset)
+    return {"total": total, "count": len(captures), "offset": max(0, offset), "captures": captures}
 
 
 @app.get("/api/captures/{capture_id}")

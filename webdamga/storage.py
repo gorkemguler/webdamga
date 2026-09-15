@@ -123,6 +123,30 @@ class Store:
             ).fetchall()
         return [dict(row) for row in rows]
 
+    def search_captures(self, *, query: str = "", limit: int = 50, offset: int = 0) -> tuple[list[dict], int]:
+        """URL/başlık/id'de arayarak sayfalanmış yakalama listesi ve toplam sayı.
+
+        `query` boşsa tüm kayıtlar. Eşleşme büyük/küçük harfe duyarsız; URL,
+        nihai URL, sayfa başlığı ve id üzerinde alt dize araması yapılır.
+        """
+        where, params = "", []
+        if query.strip():
+            # LIKE jokerlerini (% _ \) kaçır ki kullanıcı metni birebir aransın.
+            escaped = query.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+            like = f"%{escaped}%"
+            where = (
+                " WHERE requested_url LIKE ? ESCAPE '\\' OR final_url LIKE ? ESCAPE '\\' "
+                "OR page_title LIKE ? ESCAPE '\\' OR id LIKE ? ESCAPE '\\'"
+            )
+            params = [like, like, like, like]
+        with closing(self._conn()) as conn:
+            total = conn.execute(f"SELECT COUNT(*) FROM captures{where}", params).fetchone()[0]
+            rows = conn.execute(
+                f"SELECT * FROM captures{where} ORDER BY created_utc DESC LIMIT ? OFFSET ?",
+                [*params, limit, max(0, offset)],
+            ).fetchall()
+        return [dict(row) for row in rows], total
+
     def get(self, capture_id: str) -> dict | None:
         with closing(self._conn()) as conn:
             row = conn.execute("SELECT * FROM captures WHERE id = ?", (capture_id,)).fetchone()
