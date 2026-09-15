@@ -13,6 +13,7 @@
       <dt>{{ _('web.detail.final_url') }}</dt><dd>{{ m.final_url }}</dd>
       <dt>{{ _('web.detail.http') }}</dt><dd>{{ m.http_status }} {{ m.http_status_text }}</dd>
       <dt>{{ _('web.detail.title') }}</dt><dd>{{ m.page_title }}</dd>
+      {% if m.emulated_device %}<dt>{{ _('web.detail.device') }}</dt><dd>{{ m.emulated_device }}</dd>{% endif %}
       <dt>{{ _('web.detail.requested_at') }}</dt><dd>{{ m.requested_at_utc }}</dd>
       <dt>{{ _('web.detail.completed_at') }}</dt><dd>{{ m.completed_at_utc }}</dd>
       {% if m.remote_address %}<dt>{{ _('web.detail.server_ip') }}</dt><dd>{{ m.remote_address.ipAddress }}:{{ m.remote_address.port }}</dd>{% endif %}

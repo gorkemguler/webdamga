@@ -116,6 +116,7 @@
   <dt>{{ _('report.field.final_url') }}</dt><dd class="mono">{{ m.final_url }}</dd>
   <dt>{{ _('report.field.http') }}</dt><dd>{{ m.http_status }} {{ m.http_status_text }}</dd>
   <dt>{{ _('report.field.page_title') }}</dt><dd>{{ m.page_title }}</dd>
+  {% if m.emulated_device %}<dt>{{ _('report.field.device') }}</dt><dd>{{ m.emulated_device }}</dd>{% endif %}
   <dt>{{ _('report.field.requested_at') }}</dt><dd class="mono">{{ m.requested_at_utc }}</dd>
   <dt>{{ _('report.field.completed_at') }}</dt><dd class="mono">{{ m.completed_at_utc }}</dd>
 </dl>

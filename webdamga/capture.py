@@ -34,6 +34,7 @@ from playwright.async_api import Response, async_playwright
 
 from . import __version__
 from .config import CaptureSettings
+from .devices import resolve_device
 from .network import EGRESS_CHECK_URL, ProxyError, Route, ensure_reachable, parse_egress, resolve_route
 from .seal import prepare_signing, seal_capture
 from .security import UrlNotAllowed, validate_capture_url
@@ -194,15 +195,30 @@ async def _browse(run: _Run, route: Route) -> None:
             if egress.get("is_tor"):
                 meta["network"]["mode"] = "tor"
 
-        context = await browser.new_context(
-            user_agent=settings.user_agent,
-            viewport={"width": settings.viewport_width, "height": settings.viewport_height},
-            color_scheme=settings.color_scheme,
-            ignore_https_errors=True,
-            record_har_path=str(run.har_path),
-            record_har_mode="full",
-            record_har_content=settings.har_content,
-        )
+        context_options: dict = {
+            "user_agent": settings.user_agent,
+            "viewport": {"width": settings.viewport_width, "height": settings.viewport_height},
+            "color_scheme": settings.color_scheme,
+            "ignore_https_errors": True,
+            "record_har_path": str(run.har_path),
+            "record_har_mode": "full",
+            "record_har_content": settings.har_content,
+        }
+        # Cihaz taklidi: UA, viewport, ölçek, dokunmatik ve mobil bayrağını
+        # gerçek cihazla tutarlı hâle getirir (smishing sayfaları için).
+        if settings.device:
+            try:
+                device = resolve_device(pw, settings.device)
+                context_options.update(device.context_options())
+                meta["emulated_device"] = device.name
+            except KeyError:
+                run.errors.append(f"device: unknown device '{settings.device}'")
+                return
+        if settings.accept_language:
+            context_options["locale"] = settings.accept_language.split(",")[0].split(";")[0].strip()
+            context_options["extra_http_headers"] = {"Accept-Language": settings.accept_language}
+
+        context = await browser.new_context(**context_options)
         # Kaydedici WARC kapalıyken de çalışır: response.html'in ham baytları
         # da buradan geliyor.
         run.recorder = ResponseRecorder()
@@ -224,10 +240,13 @@ async def _browse(run: _Run, route: Route) -> None:
         )
 
         main_response: Response | None = None
+        goto_kwargs: dict = {"wait_until": settings.wait_until, "timeout": settings.timeout_ms}
+        if settings.referer:
+            # Kaynak yalnızca belirli bir yerden gelen ziyaretçiye içerik
+            # gösteriyorsa, o Referer ile yaklaşabilmek gerekir.
+            goto_kwargs["referer"] = settings.referer
         try:
-            main_response = await page.goto(
-                run.url, wait_until=settings.wait_until, timeout=settings.timeout_ms
-            )
+            main_response = await page.goto(run.url, **goto_kwargs)
             if settings.extra_wait_ms:
                 await page.wait_for_timeout(settings.extra_wait_ms)
         except PlaywrightError as exc:

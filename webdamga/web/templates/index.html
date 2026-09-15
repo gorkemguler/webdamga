@@ -24,6 +24,14 @@
           {% for r in routes %}<option value="{{ r }}">{{ r }}</option>{% endfor %}
         </select>
       </label>
+      <label>{{ _('web.index.device') }}
+        <select name="device">
+          <option value="" selected>{{ _('web.index.device.desktop') }}</option>
+          {% for d in devices %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>{{ _('web.index.referer') }}<input type="text" name="referer" autocomplete="off" placeholder="https://t.co/…"></label>
+      <label>{{ _('web.index.accept_language') }}<input type="text" name="accept_language" autocomplete="off" placeholder="tr-TR,tr;q=0.9"></label>
       <label class="chk"><input type="checkbox" name="full_page" value="true" checked> {{ _('web.index.full_page') }}</label>
       <label class="chk"><input type="checkbox" name="record_egress" value="true"> {{ _('web.index.record_egress') }}</label>
       <label class="chk" title="{{ _('web.detail.timestamp_hint') }}"><input type="checkbox" name="timestamp" value="true"> {{ _('web.index.timestamp') }}</label>

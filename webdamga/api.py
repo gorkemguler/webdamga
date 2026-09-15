@@ -147,6 +147,12 @@ def _checked_route(route: str | None) -> str | None:
     return route
 
 
+def _featured_devices() -> list[str]:
+    from .devices import FEATURED
+
+    return list(FEATURED)
+
+
 def _same_host_captures(capture_id: str, meta: dict) -> list[dict]:
     """Aynı sunucuya ait diğer yakalamalar, en yeniden eskiye."""
     host = urlsplit(meta.get("final_url") or meta.get("requested_url") or "").hostname
@@ -190,6 +196,7 @@ def index(request: Request, lang: str = Depends(get_lang)) -> HTMLResponse:
             "captures": _store.list(200),
             "active_jobs": list(reversed(_store.list_jobs(statuses=JOB_ACTIVE, limit=50))),
             "routes": _route_names(),
+            "devices": _featured_devices(),
         },
     )
 
@@ -206,6 +213,9 @@ def create_capture(
     route: str = Form(""),
     record_egress: bool = Form(False),
     timestamp: bool = Form(False),
+    device: str = Form(""),
+    referer: str = Form(""),
+    accept_language: str = Form(""),
 ) -> RedirectResponse:
     settings = CaptureSettings(
         wait_until=wait_until,
@@ -217,6 +227,9 @@ def create_capture(
         proxy_profile=_checked_route(route),
         record_egress=record_egress,
         timestamp=timestamp,
+        device=device.strip() or None,
+        referer=referer.strip() or None,
+        accept_language=accept_language.strip() or None,
     )
     job = queue.enqueue(_checked_url(url), settings, source="web")
     return RedirectResponse(url=f"/jobs/{job['id']}", status_code=303)
@@ -431,6 +444,9 @@ class CaptureRequest(BaseModel):
     route: str | None = Field(None, description="proxy profile name, e.g. 'tor'")
     record_egress: bool = False
     timestamp: bool = False
+    device: str | None = Field(None, description="device to emulate, e.g. 'iPhone 15'")
+    referer: str | None = None
+    accept_language: str | None = None
 
 
 @app.get("/api/captures")
@@ -523,6 +539,9 @@ def api_create_job(body: CaptureRequest) -> dict:
         proxy_profile=_checked_route(body.route),
         record_egress=body.record_egress,
         timestamp=body.timestamp,
+        device=body.device,
+        referer=body.referer,
+        accept_language=body.accept_language,
     )
     return _public_job(queue.enqueue(_checked_url(body.url), settings, source="api"))
 
@@ -530,6 +549,13 @@ def api_create_job(body: CaptureRequest) -> dict:
 @app.get("/api/routes")
 def api_routes() -> list[str]:
     return _route_names()
+
+
+@app.get("/api/devices")
+def api_devices() -> list[str]:
+    from .devices import FEATURED
+
+    return list(FEATURED)
 
 
 @app.get("/api/jobs")

@@ -100,6 +100,11 @@ def capture(
     warc: bool = typer.Option(True, "--warc/--no-warc", help=_h("cli.capture.opt.warc")),
     sign: bool = typer.Option(True, "--sign/--no-sign", help=_h("cli.capture.opt.sign")),
     timestamp: bool = typer.Option(False, "--timestamp", help=_h("cli.capture.opt.timestamp")),
+    device: str | None = typer.Option(None, "--device", help=_h("cli.capture.opt.device")),
+    referer: str | None = typer.Option(None, "--referer", help=_h("cli.capture.opt.referer")),
+    accept_language: str | None = typer.Option(
+        None, "--accept-language", help=_h("cli.capture.opt.accept_language")
+    ),
 ) -> None:
     """Capture a URL and seal the evidence folder."""
     lang = _lang()
@@ -119,6 +124,9 @@ def capture(
         proxy=proxy,
         proxy_profile=TOR_PROFILE if tor else via,
         record_egress=record_egress,
+        device=device,
+        referer=referer,
+        accept_language=accept_language,
         warc=warc,
         sign=sign,
         timestamp=timestamp,
@@ -146,6 +154,8 @@ def capture(
         f"{meta.get('http_status')} {meta.get('http_status_text', '')}".strip(),
     )
     table.add_row(t("cli.field.title", lang), str(meta.get("page_title")))
+    if meta.get("emulated_device"):
+        table.add_row(t("cli.field.device", lang), meta["emulated_device"])
     addr = meta.get("remote_address") or {}
     if addr:
         table.add_row(t("cli.field.server_ip", lang), f"{addr.get('ipAddress')}:{addr.get('port')}")
@@ -399,6 +409,31 @@ def pubkey() -> None:
         console.print(f"[yellow]{t('cli.pubkey.missing', lang)}[/]")
         raise typer.Exit(1)
     console.print(public.to_minisign(), end="")
+
+
+@app.command(help=_h("cli.devices.help"))
+def devices(
+    all_devices: bool = typer.Option(False, "--all", "-a", help=_h("cli.devices.opt.all")),
+) -> None:
+    """List device profiles for --device."""
+    from playwright.sync_api import sync_playwright
+
+    from .devices import FEATURED
+
+    lang = _lang()
+    with sync_playwright() as pw:
+        names = sorted(pw.devices) if all_devices else list(FEATURED)
+        table = Table(show_header=False, box=None, pad_edge=False)
+        table.add_column(style="cyan", overflow="fold")
+        table.add_column(overflow="fold", style="dim")
+        for name in names:
+            spec = pw.devices.get(name, {})
+            vp = spec.get("viewport", {})
+            kind = "📱" if spec.get("is_mobile") else "🖥"
+            table.add_row(name, f"{kind} {vp.get('width', '?')}×{vp.get('height', '?')}")
+    console.print(table)
+    if not all_devices:
+        console.print(f"[dim]{t('cli.devices.more', lang)}[/]")
 
 
 @app.command(help=_h("cli.sign.help"))

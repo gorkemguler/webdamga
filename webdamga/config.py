@@ -41,6 +41,9 @@ class CaptureSettings:
     warc: bool = True  # yeniden oynatılabilir archive.warc.gz üret
     sign: bool = True  # anahtar varsa manifestoyu imzala (webdamga keygen)
     timestamp: bool = False  # RFC 3161 + OpenTimestamps; manifest özetini üçüncü taraflara gönderir
+    device: str | None = None  # taklit edilecek cihaz (ör. "iPhone 15"); UA/viewport'u geçersiz kılar
+    referer: str | None = None  # yakalama isteğine eklenecek Referer başlığı
+    accept_language: str | None = None  # ör. "tr-TR,tr;q=0.9"; kaynağın dil hedeflemesi için
 
     def as_dict(self) -> dict:
         """metadata.json'a yazılan, okunur biçim. Proxy kimlik bilgisi içermez."""
@@ -63,6 +66,9 @@ class CaptureSettings:
             "warc": self.warc,
             "sign": self.sign,
             "timestamp": self.timestamp,
+            "device": self.device,
+            "referer": self.referer,
+            "accept_language": self.accept_language,
         }
 
     def to_storage(self) -> dict:
