@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import typing
+
 import importlib
 import json
 from pathlib import Path
@@ -16,7 +18,7 @@ from webdamga.devices import FEATURED, Device, known_device_names, resolve_devic
 class _FakePlaywright:
     """Playwright'in pw.devices sözlüğünü taklit eder."""
 
-    devices = {
+    devices: typing.ClassVar[dict] = {
         "iPhone 15": {
             "user_agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X) Safari",
             "viewport": {"width": 393, "height": 659},
@@ -139,7 +141,7 @@ def test_devices_endpoint_and_form(client) -> None:
 
 
 def test_monitor_can_carry_a_device(client) -> None:
-    http, api = client
+    http, _ = client
     # Monitor API'si cihazı doğrudan almıyor; ama form yakalamalarında olduğu
     # gibi izleyici de sonraki turlarda ayarları taşımalı (route/timestamp).
     body = http.post("/api/monitors", json={"url": "example.com", "interval_minutes": 60}).json()
