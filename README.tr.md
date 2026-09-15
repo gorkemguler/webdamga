@@ -71,6 +71,19 @@ python -m playwright install chromium
 
 > `playwright install chromium` bir kez Chromium'u (~150 MB) indirir.
 
+### Docker
+
+Hazır imaj Chromium'u paketler, başka kurulum gerektirmez:
+
+```bash
+docker build -t webdamga .
+docker run -p 8000:8000 -v webdamga-data:/data webdamga
+```
+
+Yakalamalar, veritabanı ve imza anahtarları `/data` volume'ünde durur.
+Yapılandırmayı `-e` ile ver, ör. `-e WEBDAMGA_WEBHOOK_URL=...`. Konteyneri
+localhost dışına açacaksan aşağıdaki güvenlik notunu oku.
+
 ---
 
 ## Kullanım
@@ -82,6 +95,7 @@ webdamga capture https://ornek.com/giris
 webdamga capture https://ornek.com --wait-until networkidle --wait 3 --width 1440
 webdamga list
 webdamga verify 20260910T142530Z-ornek-com-ab12cd
+webdamga prune --older-than 30 --dry-run   # eski yakalamaları temizle
 ```
 
 ### Web arayüzü
@@ -94,6 +108,8 @@ Yakalamalar arka plandaki bir kuyrukta çalışır; bitmelerini beklerken sayfa
 kullanılabilir kalır ve kuyruk yeniden başlatmalarda kaybolmaz. Arayüzden
 yakalama, gezinme, doğrulama, karşılaştırma, dışa aktarma ve izleme yapılabilir.
 `WEBDAMGA_CONCURRENCY` aynı anda kaç yakalama çalışacağını belirler (varsayılan 1).
+
+Yakalama listesi aranabilir (URL, başlık ya da id) ve sayfalanır.
 
 ### Bir yakalamayı kanıt olarak gönderme
 
@@ -204,6 +220,39 @@ yalnızca adlandırılmış profilleri sunar, serbest proxy adresi kabul etmez.
 
 ---
 
+
+## Cihaz taklidi
+
+Smishing sayfaları içeriği çoğu zaman yalnızca telefona gösterir. Cihaz gibi yakala:
+
+```bash
+webdamga capture https://ornek.com --device "iPhone 15"
+webdamga capture https://ornek.com --referer https://t.co/abc --accept-language tr-TR,tr
+webdamga devices          # cihaz profillerini listele
+```
+
+`--device` User-Agent, viewport, ölçek ve dokunmatiği gerçek cihazla eşler;
+`--referer` ve `--accept-language` yalnızca belirli bir kaynaktan ya da dilden
+gelene açılan sayfalar için. Web formu da aynısını sunar.
+
+---
+
+## Kime ihbar edilir
+
+```bash
+webdamga capture https://ornek.com --intel   # yakalama sırasında topla
+webdamga intel ornek.com                      # ya da tek başına sorgula
+```
+
+Registrar ve kayıt tarihlerini, ağ sahibini, origin ASN'yi ve **abuse iletişim
+e-postalarını** toplar; RDAP ve Team Cymru üzerinden (dış bağımlılık yok,
+sorgular hedefe değil kayıt otoritelerine gider). `--intel` ile sonuç
+`intel.json` olarak manifestoya mühürlenir; yakalama sayfasında **Kime ihbar
+edilir** bölümü isteğe bağlı getirir. PDF rapora da girer, yani kanıt paketi
+karşı tarafa nereye göndereceğini de söyler.
+
+---
+
 ## İki yakalamayı karşılaştırma
 
 ```bash
@@ -245,6 +294,12 @@ içinde ya da tek başına `webdamga monitor run` ile çalışır. **İzleme** s
 her izleyicinin turlarını, karşılaştırmaya bağlanan değişiklik rozetleriyle
 gösterir. Bir izleyiciyi silmek yakalamalarını silmez.
 
+Bir değişiklik bulunduğunda webdamga seni webhook (JSON ya da Slack / Discord
+biçimi) ya da e-posta ile uyarabilir. `WEBDAMGA_WEBHOOK_URL` ya da
+`WEBDAMGA_SMTP_*` değişkenlerini ayarla, eşiği `WEBDAMGA_NOTIFY_LEVEL`
+(`minor`/`major`, varsayılan `major`) ile seç ve `webdamga monitor notify-test`
+ile dene.
+
 ---
 
 ## Dil
@@ -259,6 +314,18 @@ ortamın ya da tarayıcın Türkçe istiyorsa Türkçeye geçer.
 
 ---
 
+
+## Güvenlik
+
+Arayüz `localhost` içindir. Yalnızca `http`/`https` yakalar (`file://`,
+`chrome://`, `javascript:` reddedilir), yakalanan sayfaları script'leri API'ye
+erişemesin diye sandbox'lı indirme olarak sunar, başka origin'den gelen durum
+değiştiren istekleri ve beklenmeyen `Host` başlıklarını reddeder (CSRF ve DNS
+rebinding). Başka bir makineden erişmek için önüne TLS'li bir reverse proxy koy
+ve `WEBDAMGA_ALLOWED_HOSTS`'u kullandığın host adına ayarla; henüz yerleşik
+kimlik doğrulama yok, erişimi proxy'de kısıtla.
+
+
 ## JSON API
 
 | Uç | Açıklama |
@@ -272,7 +339,8 @@ ortamın ya da tarayıcın Türkçe istiyorsa Türkçeye geçer.
 | `GET /captures/{id}/files/{ad}` | Tek bir delil (yalnızca manifestodaki adlar) |
 | `GET /api/diff?a=&b=` | İki yakalamayı karşılaştır |
 | `GET/POST /api/monitors`, `GET/PATCH/DELETE /api/monitors/{id}`, `POST /api/monitors/{id}/run` | İzleyiciler |
-| `GET /api/routes` | Kullanılabilir proxy profilleri |
+| `POST /captures/{id}/intel` | Bir yakalama için abuse iletişimi araştır |
+| `GET /api/routes`, `GET /api/devices` | Proxy profilleri, cihaz profilleri |
 
 ---
 
@@ -287,6 +355,10 @@ ortamın ya da tarayıcın Türkçe istiyorsa Türkçeye geçer.
 | `WEBDAMGA_TSA_URL` | DigiCert | RFC 3161 zaman damgası otoritesi |
 | `WEBDAMGA_TSA_CA` | sistem paketi | TSA token'larını doğrulamak için CA dosyası |
 | `WEBDAMGA_OTS_CALENDARS` | herkese açık havuzlar | Virgülle ayrılmış OpenTimestamps takvimleri |
+| `WEBDAMGA_ALLOWED_HOSTS` | loopback | Arayüzün kabul ettiği ek `Host` değerleri |
+| `WEBDAMGA_WEBHOOK_URL` / `_FORMAT` | yok | Değişiklik bildirimi webhook'u |
+| `WEBDAMGA_SMTP_*`, `WEBDAMGA_NOTIFY_LEVEL` | yok | E-posta bildirimi ve eşik |
+| `WEBDAMGA_BASE_URL` | yok | Bildirimlerde mutlak linkler |
 
 ---
 
@@ -317,12 +389,15 @@ Tamamlananlar:
 - [x] İki yakalamayı karşılaştırma (görsel, metin, formlar, sunucular, metadata)
 - [x] Bir URL'yi zamanlanmış aralıklarla izleme
 - [x] PDF kanıt raporu ve gönderilebilir `.zip` paketi
+- [x] Cihaz / Referer / Accept-Language taklidi
+- [x] Registrar, ağ sahibi, ASN ve abuse iletişimi
+- [x] Değişiklik bildirimleri (webhook, e-posta)
+- [x] Arama, sayfalama, saklama ve CSRF/host sıkılaştırma
 
 Sıradakiler:
 
 - [ ] Tek dosyada oynatma için WACZ paketleme
-- [ ] İzlenen sayfa değişince bildirim (webhook, e-posta)
-- [ ] Arayüzü localhost dışında çalıştırmak için kimlik doğrulama
+- [ ] Localhost dışı için yerleşik kimlik doğrulama
 - [ ] Chromium'un yanında Firefox ve WebKit ile yakalama
 
 ---

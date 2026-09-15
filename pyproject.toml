@@ -36,9 +36,6 @@ Issues = "https://github.com/gorkemguler/webdamga/issues"
 [tool.hatch.build.targets.wheel]
 packages = ["webdamga"]
 
-[tool.hatch.build.targets.wheel.force-include]
-"webdamga/web" = "webdamga/web"
-
 [tool.ruff]
 line-length = 110
 target-version = "py311"

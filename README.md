@@ -71,6 +71,19 @@ python -m playwright install chromium
 
 > `playwright install chromium` downloads Chromium (~150 MB) once.
 
+### Docker
+
+A prebuilt image bundles Chromium, so there is nothing else to install:
+
+```bash
+docker build -t webdamga .
+docker run -p 8000:8000 -v webdamga-data:/data webdamga
+```
+
+Captures, the database and signing keys live in the `/data` volume. Set
+configuration with `-e`, for example `-e WEBDAMGA_WEBHOOK_URL=...`. If you
+expose the container beyond localhost, read the security note below.
+
 ---
 
 ## Usage
@@ -82,6 +95,7 @@ webdamga capture https://example.com/login
 webdamga capture https://example.com --wait-until networkidle --wait 3 --width 1440
 webdamga list
 webdamga verify 20260910T142530Z-example-com-ab12cd
+webdamga prune --older-than 30 --dry-run   # tidy up old captures
 ```
 
 ### Web interface
@@ -94,6 +108,8 @@ Captures run in a background queue, so the page stays usable while they finish
 and survives restarts. The interface covers capturing, browsing, verifying,
 comparing, exporting and monitoring. `WEBDAMGA_CONCURRENCY` sets how many
 captures run at once (default 1).
+
+The capture list is searchable (URL, title or id) and paginated.
 
 ### Sending a capture as evidence
 
@@ -205,6 +221,39 @@ named profiles, never free-form proxy addresses.
 
 ---
 
+
+## Emulating a device
+
+Smishing pages often serve content only to a phone. Capture as one:
+
+```bash
+webdamga capture https://example.com --device "iPhone 15"
+webdamga capture https://example.com --referer https://t.co/abc --accept-language tr-TR,tr
+webdamga devices          # list device profiles
+```
+
+`--device` sets the User-Agent, viewport, scale and touch to match a real
+device; `--referer` and `--accept-language` help with pages that only reveal
+themselves to a particular source or language. The web form offers the same.
+
+---
+
+## Who to report to
+
+```bash
+webdamga capture https://example.com --intel   # collect during the capture
+webdamga intel example.com                      # or look up on its own
+```
+
+Collects the registrar and registration dates, the network owner, the origin
+ASN and the **abuse contact emails**, over RDAP and Team Cymru (no extra
+dependencies, queries go to the registries, not the target). With `--intel` the
+result is sealed into the manifest as `intel.json`; on a capture's page the
+**Who to report to** section fetches it on demand. It also lands in the PDF
+report so the evidence package tells the recipient where to send it.
+
+---
+
 ## Comparing two captures
 
 ```bash
@@ -247,6 +296,11 @@ scheduler runs inside `webdamga serve`, or on its own with `webdamga monitor run
 The **Monitors** page shows each monitor's runs with change badges linking to
 the comparison. Deleting a monitor keeps its captures.
 
+When a change is found, webdamga can notify you by webhook (JSON, or Slack /
+Discord format) or email. Set `WEBDAMGA_WEBHOOK_URL` or the `WEBDAMGA_SMTP_*`
+variables, choose the threshold with `WEBDAMGA_NOTIFY_LEVEL` (`minor`/`major`,
+default `major`), and test it with `webdamga monitor notify-test`.
+
 ---
 
 ## Language
@@ -261,6 +315,18 @@ default; Turkish is picked up when your environment or browser asks for it.
 
 ---
 
+
+## Security
+
+The interface is meant for `localhost`. It refuses to capture anything but
+`http`/`https` (no `file://`, `chrome://`, `javascript:`), serves captured
+pages as sandboxed downloads so their scripts cannot reach the API, and rejects
+cross-origin state-changing requests and unexpected `Host` headers (CSRF and
+DNS-rebinding). To reach it from another machine, put it behind a reverse proxy
+with TLS and set `WEBDAMGA_ALLOWED_HOSTS` to the hostname you use; there is no
+built-in authentication yet, so restrict access at the proxy.
+
+
 ## JSON API
 
 | Endpoint | Description |
@@ -274,7 +340,8 @@ default; Turkish is picked up when your environment or browser asks for it.
 | `GET /captures/{id}/files/{name}` | One artefact (manifest-listed names only) |
 | `GET /api/diff?a=&b=` | Compare two captures |
 | `GET/POST /api/monitors`, `GET/PATCH/DELETE /api/monitors/{id}`, `POST /api/monitors/{id}/run` | Monitors |
-| `GET /api/routes` | Available proxy profiles |
+| `POST /captures/{id}/intel` | Look up abuse contacts for a capture |
+| `GET /api/routes`, `GET /api/devices` | Proxy profiles, device profiles |
 
 ---
 
@@ -289,6 +356,10 @@ default; Turkish is picked up when your environment or browser asks for it.
 | `WEBDAMGA_TSA_URL` | DigiCert | RFC 3161 time stamp authority |
 | `WEBDAMGA_TSA_CA` | system bundle | CA file for checking TSA tokens |
 | `WEBDAMGA_OTS_CALENDARS` | public pools | Comma-separated OpenTimestamps calendars |
+| `WEBDAMGA_ALLOWED_HOSTS` | loopback | Extra `Host` values the interface accepts |
+| `WEBDAMGA_WEBHOOK_URL` / `_FORMAT` | none | Change-notification webhook |
+| `WEBDAMGA_SMTP_*`, `WEBDAMGA_NOTIFY_LEVEL` | none | Email notifications and threshold |
+| `WEBDAMGA_BASE_URL` | none | Absolute links in notifications |
 
 ---
 
@@ -319,12 +390,15 @@ Done:
 - [x] Comparing two captures (visual, text, forms, servers, metadata)
 - [x] Monitoring a URL on a schedule
 - [x] PDF evidence report and a sendable `.zip` package
+- [x] Device / Referer / Accept-Language emulation for cloaked pages
+- [x] Registrar, network owner, ASN and abuse contacts
+- [x] Change notifications (webhook, email)
+- [x] Search, pagination, retention and CSRF/host hardening
 
 Next:
 
 - [ ] WACZ packaging for one-file replay
-- [ ] Notifications (webhook, email) when a monitored page changes
-- [ ] Authentication, for running the interface beyond localhost
+- [ ] Built-in authentication for running beyond localhost
 - [ ] Capturing with Firefox and WebKit as well as Chromium
 
 ---
