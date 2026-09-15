@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-import typing
-
 import importlib
 import json
+import typing
 from pathlib import Path
 
 import pytest
@@ -151,9 +150,7 @@ def test_monitor_can_carry_a_device(client) -> None:
 # ------------------------------------------------------------- integration
 
 
-@pytest.mark.skipif(
-    not __import__("os").environ.get("WEBDAMGA_INTEGRATION"), reason="needs Chromium"
-)
+@pytest.mark.skipif(not __import__("os").environ.get("WEBDAMGA_INTEGRATION"), reason="needs Chromium")
 def test_real_device_emulation_changes_user_agent(tmp_path: Path) -> None:
     import asyncio
     import threading
