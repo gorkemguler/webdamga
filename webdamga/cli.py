@@ -105,6 +105,7 @@ def capture(
     accept_language: str | None = typer.Option(
         None, "--accept-language", help=_h("cli.capture.opt.accept_language")
     ),
+    intel: bool = typer.Option(False, "--intel", help=_h("cli.capture.opt.intel")),
 ) -> None:
     """Capture a URL and seal the evidence folder."""
     lang = _lang()
@@ -127,6 +128,7 @@ def capture(
         device=device,
         referer=referer,
         accept_language=accept_language,
+        intel=intel,
         warc=warc,
         sign=sign,
         timestamp=timestamp,
@@ -183,6 +185,9 @@ def capture(
     if egress.get("ip"):
         tor_note = f" · {t('cli.field.via_tor', lang)}" if egress.get("is_tor") else ""
         table.add_row(t("cli.field.egress", lang), f"{egress['ip']}{tor_note}")
+    intel_summary = meta.get("intel") or {}
+    if intel_summary.get("abuse_emails"):
+        table.add_row(t("cli.field.abuse", lang), ", ".join(intel_summary["abuse_emails"]))
     table.add_row(t("cli.field.folder", lang), meta["dir"])
     table.add_row(t("cli.field.manifest", lang), meta.get("manifest_sha256", "-"))
     signing = meta.get("signing") or {}
@@ -409,6 +414,56 @@ def pubkey() -> None:
         console.print(f"[yellow]{t('cli.pubkey.missing', lang)}[/]")
         raise typer.Exit(1)
     console.print(public.to_minisign(), end="")
+
+
+@app.command(help=_h("cli.intel.help"))
+def intel(
+    target: str = typer.Argument(..., help=_h("cli.intel.arg.target")),
+    as_json: bool = typer.Option(False, "--json", help=_h("cli.diff.opt.json")),
+) -> None:
+    """Look up registrar, network owner, ASN and abuse contacts."""
+    import ipaddress
+    import socket as _socket
+    from urllib.parse import urlsplit
+
+    from .intel import gather
+
+    lang = _lang()
+    raw = target.strip()
+    host = urlsplit(raw if "://" in raw else "//" + raw).hostname or raw
+    try:
+        ipaddress.ip_address(host)
+        ip = host
+    except ValueError:
+        try:
+            ip = _socket.gethostbyname(host)
+        except OSError:
+            ip = None
+    meta = {"final_url": f"https://{host}/", "remote_address": {"ipAddress": ip} if ip else None}
+    report = gather(meta)
+    if as_json:
+        print(json.dumps(report, indent=2, ensure_ascii=False))
+        raise typer.Exit()
+
+    table = Table(show_header=False, box=None, pad_edge=False)
+    table.add_column(style="dim")
+    table.add_column(overflow="fold")
+    dom = report.get("domain") or {}
+    if dom.get("registrar"):
+        table.add_row(t("cli.intel.registrar", lang), dom["registrar"])
+    if dom.get("registered"):
+        table.add_row(t("cli.intel.registered", lang), f"{dom['registered']} → {dom.get('expires') or '?'}")
+    ipinfo = report.get("ip") or {}
+    if ipinfo.get("network_name"):
+        table.add_row(t("cli.intel.network", lang), f"{ipinfo['network_name']} ({ipinfo.get('cidr') or ip})")
+    asn = report.get("asn") or {}
+    if asn.get("asn"):
+        table.add_row(t("cli.intel.asn", lang), f"AS{asn['asn']} · {asn.get('org') or ''}")
+    if report.get("abuse_emails"):
+        table.add_row(t("cli.field.abuse", lang), ", ".join(report["abuse_emails"]))
+    console.print(table)
+    if not report.get("abuse_emails"):
+        console.print(f"[dim]{t('cli.intel.no_abuse', lang)}[/]")
 
 
 @app.command(help=_h("cli.devices.help"))

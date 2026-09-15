@@ -1,0 +1,19 @@
+<dl>
+  {% if intel.domain and intel.domain.registrar %}
+  <dt>{{ _('web.detail.intel.registrar') }}</dt><dd>{{ intel.domain.registrar }}</dd>
+  {% endif %}
+  {% if intel.domain and intel.domain.registered %}
+  <dt>{{ _('web.detail.intel.registered') }}</dt><dd>{{ intel.domain.registered }}{% if intel.domain.expires %} &rarr; {{ intel.domain.expires }}{% endif %}</dd>
+  {% endif %}
+  {% if intel.ip and intel.ip.network_name %}
+  <dt>{{ _('web.detail.intel.network') }}</dt><dd>{{ intel.ip.network_name }}{% if intel.ip.cidr %} <span class="dim">({{ intel.ip.cidr }})</span>{% endif %}</dd>
+  {% endif %}
+  {% if intel.asn and intel.asn.asn %}
+  <dt>{{ _('web.detail.intel.asn') }}</dt><dd>AS{{ intel.asn.asn }} <span class="dim">{{ intel.asn.org }}</span></dd>
+  {% endif %}
+  <dt>{{ _('web.detail.intel.abuse') }}</dt>
+  <dd>
+    {% for email in intel.abuse_emails %}<a href="mailto:{{ email }}"><code>{{ email }}</code></a>{% if not loop.last %}, {% endif %}
+    {% else %}<span class="dim">{{ _('web.detail.intel.none') }}</span>{% endfor %}
+  </dd>
+</dl>

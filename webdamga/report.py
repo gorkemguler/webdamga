@@ -8,6 +8,7 @@ tarafın webdamga kurmadan doğrulama yapabilmesi için bir README.txt içerir.
 from __future__ import annotations
 
 import base64
+import json
 import zipfile
 from datetime import UTC, datetime
 from pathlib import Path
@@ -75,6 +76,17 @@ def _signer_pub_file(info: dict) -> str | None:
     return f"untrusted comment: minisign public key {info['key_id']}\n{info['public_key']}\n"
 
 
+def _load_intel(capture_dir: Path) -> dict | None:
+    """--intel ile mühürlenmiş istihbarat, rapora dâhil edilmek üzere."""
+    path = Path(capture_dir) / "intel.json"
+    if path.is_file():
+        try:
+            return json.loads(path.read_text(encoding="utf-8"))
+        except ValueError:
+            return None
+    return None
+
+
 def build_report_html(capture_dir: Path, meta: dict, manifest: dict, lang: str = DEFAULT_LANG) -> str:
     """PDF'e basılacak raporun HTML'ini üretir."""
     # Rapora ekran üstü görüntüyü gömüyoruz; tam sayfa görüntü çok büyük
@@ -93,6 +105,7 @@ def build_report_html(capture_dir: Path, meta: dict, manifest: dict, lang: str =
         manifest_sha256=_manifest_sha256(capture_dir),
         signature=signature_info(capture_dir, meta),
         timestamps=inspect_timestamps(capture_dir, run_openssl=False),
+        intel=_load_intel(capture_dir),
     )
 
 

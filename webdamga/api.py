@@ -153,6 +153,16 @@ def _featured_devices() -> list[str]:
     return list(FEATURED)
 
 
+def _load_intel(capture_id: str) -> dict | None:
+    """--intel ile mühürlenmiş ya da sonradan toplanmış istihbarat, varsa."""
+    sealed = _capture_dir(capture_id) / "intel.json"
+    side = DATA_DIR / "intel" / capture_id / "intel.json"
+    for path in (sealed, side):
+        if path.is_file():
+            return json.loads(path.read_text(encoding="utf-8"))
+    return None
+
+
 def _same_host_captures(capture_id: str, meta: dict) -> list[dict]:
     """Aynı sunucuya ait diğer yakalamalar, en yeniden eskiye."""
     host = urlsplit(meta.get("final_url") or meta.get("requested_url") or "").hostname
@@ -216,6 +226,7 @@ def create_capture(
     device: str = Form(""),
     referer: str = Form(""),
     accept_language: str = Form(""),
+    intel: bool = Form(False),
 ) -> RedirectResponse:
     settings = CaptureSettings(
         wait_until=wait_until,
@@ -230,6 +241,7 @@ def create_capture(
         device=device.strip() or None,
         referer=referer.strip() or None,
         accept_language=accept_language.strip() or None,
+        intel=intel,
     )
     job = queue.enqueue(_checked_url(url), settings, source="web")
     return RedirectResponse(url=f"/jobs/{job['id']}", status_code=303)
@@ -316,6 +328,7 @@ def capture_detail(request: Request, capture_id: str, lang: str = Depends(get_la
             "capture_id": capture_id,
             "timestamps": inspect_timestamps(_capture_dir(capture_id), run_openssl=False),
             "comparable": _same_host_captures(capture_id, _load_meta(capture_id)),
+            "intel": _load_intel(capture_id),
         },
     )
 
@@ -346,6 +359,26 @@ def diff_image(older: str, newer: str) -> FileResponse:
 @app.get("/api/diff")
 def api_diff(a: str, b: str) -> dict:
     return _diff(a, b)[0]
+
+
+@app.post("/captures/{capture_id}/intel")
+def capture_intel(capture_id: str) -> dict:
+    """Mevcut bir yakalama için registrar/IP sahibi/ASN/abuse toplar.
+
+    intel.json mühürlü klasöre değil, ayrı bir istihbarat klasörüne yazılır;
+    manifestoyu bozmaz. Yakalama sırasında --intel ile toplanan istihbarat ise
+    manifestoya dâhildir.
+    """
+    from .intel import gather
+
+    meta = _load_meta(capture_id)
+    report = gather(meta)
+    out = DATA_DIR / "intel" / capture_id
+    out.mkdir(parents=True, exist_ok=True)
+    (out / "intel.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8"
+    )
+    return report
 
 
 @app.post("/captures/{capture_id}/timestamp")
@@ -447,6 +480,7 @@ class CaptureRequest(BaseModel):
     device: str | None = Field(None, description="device to emulate, e.g. 'iPhone 15'")
     referer: str | None = None
     accept_language: str | None = None
+    intel: bool = False
 
 
 @app.get("/api/captures")
@@ -542,6 +576,7 @@ def api_create_job(body: CaptureRequest) -> dict:
         device=body.device,
         referer=body.referer,
         accept_language=body.accept_language,
+        intel=body.intel,
     )
     return _public_job(queue.enqueue(_checked_url(body.url), settings, source="api"))
 

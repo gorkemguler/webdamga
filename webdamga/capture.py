@@ -35,6 +35,7 @@ from playwright.async_api import Response, async_playwright
 from . import __version__
 from .config import CaptureSettings
 from .devices import resolve_device
+from .intel import gather as gather_intel
 from .network import EGRESS_CHECK_URL, ProxyError, Route, ensure_reachable, parse_egress, resolve_route
 from .seal import prepare_signing, seal_capture
 from .security import UrlNotAllowed, validate_capture_url
@@ -385,6 +386,23 @@ async def capture(url: str, data_dir: Path, settings: CaptureSettings | None = N
     if run.page_errors:
         log_lines += ["", "=== PAGE ERRORS ===", *run.page_errors]
     (out_dir / "console.log").write_text("\n".join(log_lines) + ("\n" if log_lines else ""), encoding="utf-8")
+
+    # --- ihbar istihbaratı (registrar/IP sahibi/ASN/abuse) ---
+    # metadata ve manifestodan önce toplanır ki intel.json da delile girsin.
+    if settings.intel and not run.errors:
+        try:
+            report = await asyncio.to_thread(gather_intel, meta)
+            (out_dir / "intel.json").write_text(
+                json.dumps(report, indent=2, ensure_ascii=False, sort_keys=True), encoding="utf-8"
+            )
+            meta["intel"] = {
+                "abuse_emails": report.get("abuse_emails", []),
+                "registrar": (report.get("domain") or {}).get("registrar"),
+                "network": (report.get("ip") or {}).get("network_name"),
+                "asn": (report.get("asn") or {}).get("asn"),
+            }
+        except Exception as exc:  # noqa: BLE001 - istihbarat olmadan da delil geçerli
+            run.errors.append(f"intel: {type(exc).__name__}: {exc}")
 
     # --- sonlandırma ---
     meta["resource_summary"] = _summarize_har(run.har_path)

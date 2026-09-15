@@ -39,7 +39,7 @@
       <dd>{% if m.signing and m.signing.key_id %}<code>{{ m.signing.key_id }}</code>{% else %}<span class="dim">{{ _('web.detail.unsigned') }}</span>{% endif %}</dd>
       {% if m.browser %}<dt>{{ _('web.detail.browser') }}</dt><dd>{{ m.browser.name }} {{ m.browser.version }}</dd>{% endif %}
       <dt>{{ _('web.detail.user_agent') }}</dt><dd class="dim">{{ m.user_agent }}</dd>
-      <dt>{{ _('web.detail.captured_by') }}</dt><dd class="dim">{{ m.capture_host.hostname }} &middot; {{ m.capture_host.platform }}</dd>
+      {% if m.capture_host %}<dt>{{ _('web.detail.captured_by') }}</dt><dd class="dim">{{ m.capture_host.hostname }} &middot; {{ m.capture_host.platform }}</dd>{% endif %}
     </dl>
   </section>
 
@@ -60,6 +60,25 @@
   </ol>
 </section>
 {% endif %}
+
+<section class="card" id="intel-card">
+  <h3>{{ _('web.detail.intel') }}</h3>
+  <div id="intel-body"
+       data-id="{{ capture_id }}"
+       data-looking="{{ _('web.detail.intel_looking') }}"
+       data-l-registrar="{{ _('web.detail.intel.registrar') }}"
+       data-l-registered="{{ _('web.detail.intel.registered') }}"
+       data-l-network="{{ _('web.detail.intel.network') }}"
+       data-l-asn="{{ _('web.detail.intel.asn') }}"
+       data-l-abuse="{{ _('web.detail.intel.abuse') }}"
+       data-l-none="{{ _('web.detail.intel.none') }}">
+    {% if intel %}{% include "_intel.html" %}{% endif %}
+  </div>
+  {% if not intel %}
+  <p class="hint">{{ _('web.detail.intel_hint') }}</p>
+  <button type="button" id="intel-btn">{{ _('web.detail.intel_btn') }}</button>
+  {% endif %}
+</section>
 
 {% if comparable %}
 <section class="card compare">
@@ -142,6 +161,37 @@
           if (res.ok) { window.location.reload(); return; }
           btn.disabled = false;
           btn.textContent = (res.body && res.body.detail) || 'error';
+        })
+        .catch(function (err) { btn.disabled = false; btn.textContent = String(err); });
+    });
+  })();
+
+  (function () {
+    var btn = document.getElementById('intel-btn');
+    if (!btn) { return; }
+    var body = document.getElementById('intel-body');
+    function esc(s) { var d = document.createElement('div'); d.textContent = s == null ? '' : s; return d.innerHTML; }
+    function row(label, value) { return value ? '<dt>' + esc(label) + '</dt><dd>' + value + '</dd>' : ''; }
+    btn.addEventListener('click', function () {
+      btn.disabled = true;
+      btn.textContent = body.dataset.looking;
+      fetch('/captures/' + body.dataset.id + '/intel', { method: 'POST' })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          var dom = d.domain || {}, ip = d.ip || {}, asn = d.asn || {};
+          var registered = dom.registered ? esc(dom.registered) + (dom.expires ? ' → ' + esc(dom.expires) : '') : '';
+          var network = ip.network_name ? esc(ip.network_name) + (ip.cidr ? ' <span class="dim">(' + esc(ip.cidr) + ')</span>' : '') : '';
+          var asnv = asn.asn ? 'AS' + esc(asn.asn) + ' <span class="dim">' + esc(asn.org) + '</span>' : '';
+          var emails = (d.abuse_emails || []).map(function (e) {
+            return '<a href="mailto:' + esc(e) + '"><code>' + esc(e) + '</code></a>';
+          }).join(', ') || '<span class="dim">' + esc(body.dataset.lNone) + '</span>';
+          body.innerHTML = '<dl>' +
+            row(body.dataset.lRegistrar, dom.registrar ? esc(dom.registrar) : '') +
+            row(body.dataset.lRegistered, registered) +
+            row(body.dataset.lNetwork, network) +
+            row(body.dataset.lAsn, asnv) +
+            '<dt>' + esc(body.dataset.lAbuse) + '</dt><dd>' + emails + '</dd></dl>';
+          btn.hidden = true;
         })
         .catch(function (err) { btn.disabled = false; btn.textContent = String(err); });
     });

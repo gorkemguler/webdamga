@@ -159,6 +159,27 @@
 </ol>
 {% endif %}
 
+{% if intel %}
+<h2>{{ _('report.section.intel') }}</h2>
+<dl>
+  {% if intel.domain and intel.domain.registrar %}
+  <dt>{{ _('report.field.registrar') }}</dt><dd>{{ intel.domain.registrar }}</dd>
+  {% endif %}
+  {% if intel.domain and intel.domain.registered %}
+  <dt>{{ _('report.field.registered') }}</dt><dd class="mono">{{ intel.domain.registered }}{% if intel.domain.expires %} &rarr; {{ intel.domain.expires }}{% endif %}</dd>
+  {% endif %}
+  {% if intel.ip and intel.ip.network_name %}
+  <dt>{{ _('report.field.network_owner') }}</dt><dd>{{ intel.ip.network_name }}{% if intel.ip.cidr %} <span class="mono">({{ intel.ip.cidr }})</span>{% endif %}</dd>
+  {% endif %}
+  {% if intel.asn and intel.asn.asn %}
+  <dt>{{ _('report.field.asn') }}</dt><dd>AS{{ intel.asn.asn }} &middot; {{ intel.asn.org }}</dd>
+  {% endif %}
+  {% if intel.abuse_emails %}
+  <dt>{{ _('report.field.abuse') }}</dt><dd class="mono">{{ intel.abuse_emails | join(', ') }}</dd>
+  {% endif %}
+</dl>
+{% endif %}
+
 <h2>{{ _('report.section.screenshot') }}</h2>
 {% if screenshot %}
 <figure>
