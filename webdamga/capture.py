@@ -36,6 +36,7 @@ from . import __version__
 from .config import CaptureSettings
 from .network import EGRESS_CHECK_URL, ProxyError, Route, ensure_reachable, parse_egress, resolve_route
 from .seal import prepare_signing, seal_capture
+from .security import UrlNotAllowed, validate_capture_url
 from .timestamp import timestamp_capture
 from .warc import WARC_NAME, ResponseRecorder, write_warc
 
@@ -344,14 +345,21 @@ async def capture(url: str, data_dir: Path, settings: CaptureSettings | None = N
         }
     )
 
-    route = await asyncio.to_thread(_resolve_network, run, data_dir)
-    if route is not None:
-        try:
-            await _browse(run, route)
-        except Exception as exc:  # noqa: BLE001 - kanıt aracı her koşulda sonlanmalı
-            run.errors.append(f"fatal: {type(exc).__name__}: {exc}")
-    else:
-        meta.setdefault("final_url", url)
+    # Şema kontrolü tarayıcı açılmadan yapılır: file://, chrome://, javascript:
+    # gibi adresler bir kanıt aracına hiç girmemeli.
+    try:
+        validate_capture_url(url)
+    except UrlNotAllowed as exc:
+        run.errors.append(f"url: {exc}")
+
+    if not run.errors:
+        route = await asyncio.to_thread(_resolve_network, run, data_dir)
+        if route is not None:
+            try:
+                await _browse(run, route)
+            except Exception as exc:  # noqa: BLE001 - kanıt aracı her koşulda sonlanmalı
+                run.errors.append(f"fatal: {type(exc).__name__}: {exc}")
+    meta.setdefault("final_url", url)
 
     # --- konsol kaydı ---
     log_lines = list(run.console_lines)

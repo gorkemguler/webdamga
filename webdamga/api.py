@@ -17,6 +17,7 @@ from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
 
 from . import __version__
+from .capture import normalize_url
 from .config import CaptureSettings, default_data_dir
 from .diff import compare_captures, describe_reason, diff_dir
 from .hashing import MANIFEST_NAME, MANIFEST_SIDECAR, verify_capture
@@ -32,6 +33,13 @@ from .jobs import CaptureQueue
 from .monitor import MonitorError, Scheduler, add_monitor, validate_interval
 from .network import ProxyError, load_profiles
 from .report import default_package_name, export_package, render_report_pdf
+from .security import (
+    GuardMiddleware,
+    UrlNotAllowed,
+    artifact_headers,
+    safe_download_name,
+    validate_capture_url,
+)
 from .storage import JOB_ACTIVE, Store
 from .timestamp import inspect_timestamps, timestamp_capture
 
@@ -56,7 +64,19 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="webdamga", version=__version__, lifespan=lifespan)
+# Host ve CSRF koruması: kötü niyetli bir web sayfası localhost'taki arayüze
+# istek gönderip yakalama başlatamasın, izleyici silemesin.
+app.add_middleware(GuardMiddleware)
 app.mount("/static", StaticFiles(directory=str(_BASE / "web" / "static")), name="static")
+
+
+def _checked_url(url: str) -> str:
+    """URL'yi normalleştirip şemasını doğrular; geçersizse 422."""
+    try:
+        return validate_capture_url(normalize_url(url))
+    except UrlNotAllowed as exc:
+        raise HTTPException(status_code=422, detail=str(exc)) from exc
+
 
 _COOKIE_MAX_AGE = 60 * 60 * 24 * 365
 
@@ -198,7 +218,7 @@ def create_capture(
         record_egress=record_egress,
         timestamp=timestamp,
     )
-    job = queue.enqueue(url, settings, source="web")
+    job = queue.enqueue(_checked_url(url), settings, source="web")
     return RedirectResponse(url=f"/jobs/{job['id']}", status_code=303)
 
 
@@ -233,7 +253,7 @@ def create_monitor_form(
 ) -> RedirectResponse:
     settings = CaptureSettings(proxy_profile=_checked_route(route), timestamp=timestamp)
     try:
-        monitor = add_monitor(_store, url, interval, settings, label=label)
+        monitor = add_monitor(_store, _checked_url(url), interval, settings, label=label)
     except MonitorError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
     return RedirectResponse(url=f"/monitors/{monitor['id']}", status_code=303)
@@ -375,13 +395,25 @@ def capture_file(capture_id: str, name: str) -> FileResponse:
     path = (cap_dir / name).resolve()
     if path.parent != cap_dir or not path.is_file():
         raise HTTPException(status_code=404)
-    inline = path.suffix in {".png", ".pdf", ".html", ".log", ".json", ".sha256", ".har", ".mhtml"}
-    media = "text/plain; charset=utf-8" if path.suffix in {".log", ".sha256"} else None
+
+    # Yakalanan içerik düşman olabilir. Aktif türler (dom.html, page.mhtml, ...)
+    # arayüzle aynı origin'de asla çalıştırılmaz: indirme olarak, sandbox CSP ile.
+    inline, extra = artifact_headers(name)
+    # Aktif olmayanlarda bile tarayıcı text/html'e sniff etmesin diye tipi sabitliyoruz.
+    media = {
+        ".png": "image/png",
+        ".pdf": "application/pdf",
+        ".json": "application/json",
+        ".sha256": "text/plain; charset=utf-8",
+        ".log": "text/plain; charset=utf-8",
+        ".minisig": "text/plain; charset=utf-8",
+    }.get(path.suffix, "application/octet-stream")
     return FileResponse(
         str(path),
         media_type=media,
         content_disposition_type="inline" if inline else "attachment",
-        filename=name,
+        filename=safe_download_name(name),
+        headers=extra,
     )
 
 
@@ -438,7 +470,7 @@ def api_create_monitor(body: MonitorRequest) -> dict:
     )
     try:
         return _public_monitor(
-            add_monitor(_store, body.url, body.interval_minutes, settings, label=body.label)
+            add_monitor(_store, _checked_url(body.url), body.interval_minutes, settings, label=body.label)
         )
     except MonitorError as exc:
         raise HTTPException(status_code=422, detail=str(exc)) from exc
@@ -492,7 +524,7 @@ def api_create_job(body: CaptureRequest) -> dict:
         record_egress=body.record_egress,
         timestamp=body.timestamp,
     )
-    return _public_job(queue.enqueue(body.url, settings, source="api"))
+    return _public_job(queue.enqueue(_checked_url(body.url), settings, source="api"))
 
 
 @app.get("/api/routes")

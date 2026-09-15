@@ -20,4 +20,7 @@ def _isolated_signing_keys(tmp_path_factory: pytest.TempPathFactory, monkeypatch
     """Testler kullanıcının gerçek imza anahtarını ne okusun ne de üzerine yazsın."""
     key_dir = tmp_path_factory.mktemp("keys")
     monkeypatch.setenv("WEBDAMGA_KEY_DIR", str(key_dir))
+    # Starlette TestClient varsayılan olarak "Host: testserver" gönderir; host
+    # koruması bunu tanısın (yalnızca test yapılandırması).
+    monkeypatch.setenv("WEBDAMGA_ALLOWED_HOSTS", "testserver")
     return key_dir
