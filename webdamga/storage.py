@@ -152,6 +152,13 @@ class Store:
             row = conn.execute("SELECT * FROM captures WHERE id = ?", (capture_id,)).fetchone()
         return dict(row) if row else None
 
+    def delete_capture(self, capture_id: str) -> bool:
+        """İndeks kaydını siler (klasörü çağıran siler)."""
+        with closing(self._conn()) as conn:
+            cur = conn.execute("DELETE FROM captures WHERE id = ?", (capture_id,))
+            conn.commit()
+        return cur.rowcount == 1
+
     # ---------------------------------------------------------------------- jobs
 
     def create_job(

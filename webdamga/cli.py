@@ -674,6 +674,52 @@ def serve(
     uvicorn.run("webdamga.api:app", host=host, port=port, reload=False)
 
 
+@app.command(help=_h("cli.prune.help"))
+def prune(
+    older_than: int = typer.Option(30, "--older-than", help=_h("cli.prune.opt.older_than")),
+    keep_signed: bool = typer.Option(
+        True, "--keep-signed/--no-keep-signed", help=_h("cli.prune.opt.keep_signed")
+    ),
+    dry_run: bool = typer.Option(False, "--dry-run", help=_h("cli.prune.opt.dry_run")),
+    data_dir: Path | None = _DataDir,
+) -> None:
+    """Delete captures older than a number of days."""
+    from .maintenance import plan_prune, run_prune
+
+    lang = _lang()
+    ddir = _resolve_data_dir(data_dir)
+    store = Store(ddir)
+    plan = plan_prune(store, ddir, older_than_days=older_than, keep_signed=keep_signed)
+    mb = plan.freed_bytes / (1024 * 1024)
+    if not plan.delete:
+        console.print(f"[dim]{t('cli.prune.nothing', lang)}[/]")
+    for capture_id in plan.delete:
+        console.print(f"  [red]-[/] {capture_id}")
+    if plan.kept_signed:
+        console.print(f"[dim]{t('cli.prune.kept_signed', lang, count=len(plan.kept_signed))}[/]")
+    if plan.kept_baseline:
+        console.print(f"[dim]{t('cli.prune.kept_baseline', lang, count=len(plan.kept_baseline))}[/]")
+    if dry_run:
+        console.print(t("cli.prune.dry_run", lang, count=len(plan.delete), mb=f"{mb:.1f}"))
+        raise typer.Exit()
+    removed = run_prune(store, ddir, plan)
+    console.print(f"[green]{t('cli.prune.done', lang, count=removed, mb=f'{mb:.1f}')}[/]")
+
+
+@app.command("upgrade-timestamps", help=_h("cli.upgrade_ts.help"))
+def upgrade_timestamps(data_dir: Path | None = _DataDir) -> None:
+    """Upgrade pending OpenTimestamps proofs (needs the ots client)."""
+    from .maintenance import ots_client_available, upgrade_all_pending
+
+    lang = _lang()
+    ddir = _resolve_data_dir(data_dir)
+    if not ots_client_available():
+        console.print(f"[yellow]{t('cli.upgrade_ts.no_client', lang)}[/]")
+        raise typer.Exit(1)
+    counts = upgrade_all_pending(Store(ddir), ddir)
+    console.print(t("cli.upgrade_ts.done", lang, upgraded=counts["upgraded"], pending=counts["pending"]))
+
+
 @app.command(help=_h("cli.version.help"))
 def version() -> None:
     """Print the version."""
